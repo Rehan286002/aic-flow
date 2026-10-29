@@ -15,6 +15,7 @@ from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_version import DocumentVersion
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
+from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
 from app.models.in_app_notification import InAppNotification
 from app.models.institution import Institution
@@ -30,6 +31,8 @@ from app.schemas.workflow import (
     EVCVisitReportRequest,
     EVCVisitResponse,
     EVCVisitScheduleRequest,
+    ExecutiveCommitteeDecisionRequest,
+    ExecutiveCommitteeDecisionResponse,
     SHCComplianceSubmissionRequest,
     SHCHearingRecordRequest,
     SHCHearingScheduleRequest,
@@ -54,6 +57,7 @@ from app.services.workflow_service import (
     create_obligation,
     list_case_obligations,
     record_evc_visit_report,
+    record_executive_committee_decision,
     schedule_evc_visit,
     record_shc_hearing,
     record_shc_recommendation,
@@ -156,6 +160,7 @@ def get_workflow_case(
     obligations = list_case_obligations(db, case.workflow_case_id)
     evc_visit = db.scalar(select(EVCVisit).where(EVCVisit.workflow_case_id == case.workflow_case_id))
     shc_proceeding = db.scalar(select(SHCProceeding).where(SHCProceeding.workflow_case_id == case.workflow_case_id))
+    ec_decision = db.scalar(select(ExecutiveCommitteeDecision).where(ExecutiveCommitteeDecision.workflow_case_id == case.workflow_case_id))
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
@@ -164,6 +169,7 @@ def get_workflow_case(
         obligations=[ComplianceObligationResponse.model_validate(item) for item in obligations],
         evc_visit=EVCVisitResponse.model_validate(evc_visit) if evc_visit else None,
         shc_proceeding=SHCProceedingResponse.model_validate(shc_proceeding) if shc_proceeding else None,
+        executive_committee_decision=ExecutiveCommitteeDecisionResponse.model_validate(ec_decision) if ec_decision else None,
     )
 
 
@@ -220,6 +226,8 @@ def transition_workflow_case(
 ) -> WorkflowCaseDetailResponse:
     case, application = _get_case(db, workflow_case_id)
     context = _require_case_access(db, application, current_user)
+    if case.current_stage == "AWAITING_AUTHORITY" and payload.to_stage in {"APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED"}:
+        raise HTTPException(status_code=409, detail="Record the Executive Committee decision and Speaking Order before changing the statutory outcome.")
     if payload.to_stage == "EVC_SCHEDULED":
         evc_visit = db.scalar(select(EVCVisit).where(
             EVCVisit.workflow_case_id == case.workflow_case_id,
@@ -259,6 +267,34 @@ def transition_workflow_case(
         payload.to_stage,
         payload.reason,
         payload.due_at,
+    )
+    db.commit()
+    db.refresh(case)
+    return get_workflow_case(workflow_case_id, current_user, db)
+
+
+@router.post("/cases/{workflow_case_id}/executive-committee-decision", response_model=WorkflowCaseDetailResponse)
+def record_executive_committee_decision_endpoint(
+    workflow_case_id: uuid.UUID,
+    payload: ExecutiveCommitteeDecisionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> WorkflowCaseDetailResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "COMPETENT_AUTHORITY":
+        raise HTTPException(status_code=403, detail="Only the authorised Competent Authority may record this decision.")
+    record_executive_committee_decision(
+        db,
+        case,
+        current_user.user_id,
+        context.role_code,
+        outcome_code=payload.outcome_code,
+        decision_reference=payload.decision_reference,
+        decision_reasons=payload.decision_reasons,
+        speaking_order_reference=payload.speaking_order_reference,
+        speaking_order_uploaded_at=payload.speaking_order_uploaded_at,
     )
     db.commit()
     db.refresh(case)
