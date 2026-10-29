@@ -133,11 +133,91 @@ class EVCVisitCancelRequest(BaseModel):
     reason: str = Field(min_length=8, max_length=2000)
 
 
+class SHCProceedingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    shc_proceeding_id: uuid.UUID
+    workflow_case_id: uuid.UUID
+    application_id: uuid.UUID
+    status: str
+    notice_reference: str | None = None
+    hearing_mode: str | None = None
+    hearing_scheduled_at: datetime | None = None
+    hearing_details: str | None = None
+    official_schedule_reference: str | None = None
+    schedule_revision: int
+    institution_submission_reference: str | None = None
+    representative_one_name: str | None = None
+    representative_one_designation: str | None = None
+    representative_two_name: str | None = None
+    representative_two_designation: str | None = None
+    hearing_summary: str | None = None
+    hearing_recorded_by: uuid.UUID | None = None
+    hearing_recorded_at: datetime | None = None
+    recommendation_code: str | None = None
+    recommendation_text: str | None = None
+    recommendation_reference: str | None = None
+    recommendation_recorded_by: uuid.UUID | None = None
+    recommendation_recorded_at: datetime | None = None
+    created_by: uuid.UUID
+    updated_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SHCHearingScheduleRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    hearing_mode: Literal["ONLINE", "IN_PERSON"]
+    hearing_scheduled_at: datetime
+    hearing_details: str = Field(min_length=5, max_length=2000)
+    notice_reference: str | None = Field(default=None, min_length=2, max_length=180)
+    official_schedule_reference: str | None = Field(default=None, min_length=2, max_length=180)
+
+    @model_validator(mode="after")
+    def validate_hearing_schedule(self):
+        if self.hearing_scheduled_at.tzinfo is None or self.hearing_scheduled_at.utcoffset() is None:
+            raise ValueError("SHC hearing schedule must include a timezone.")
+        return self
+
+
+class SHCComplianceSubmissionRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    submission_reference: str = Field(min_length=5, max_length=500)
+    note: str = Field(min_length=8, max_length=2000)
+
+
+class SHCHearingRecordRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    representative_one_name: str = Field(min_length=2, max_length=160)
+    representative_one_designation: str = Field(min_length=2, max_length=160)
+    representative_two_name: str = Field(min_length=2, max_length=160)
+    representative_two_designation: str = Field(min_length=2, max_length=160)
+    hearing_summary: str = Field(min_length=15, max_length=6000)
+    note: str = Field(min_length=8, max_length=2000)
+
+
+class SHCRecommendationRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    recommendation_code: Literal[
+        "COMPLIANCE_REVIEWED",
+        "FURTHER_COMPLIANCE_REQUIRED",
+        "DEFICIENCIES_REMAIN",
+        "INCONCLUSIVE",
+    ]
+    recommendation_text: str = Field(min_length=15, max_length=6000)
+    recommendation_reference: str | None = Field(default=None, min_length=2, max_length=180)
+
+
 class WorkflowCaseDetailResponse(WorkflowCaseListResponse):
     requirements: list[ApplicationRequirementResponse] = Field(default_factory=list)
     events: list[WorkflowEventResponse] = Field(default_factory=list)
     obligations: list[ComplianceObligationResponse] = Field(default_factory=list)
     evc_visit: EVCVisitResponse | None = None
+    shc_proceeding: SHCProceedingResponse | None = None
 
 
 class WorkflowTransitionRequest(BaseModel):
