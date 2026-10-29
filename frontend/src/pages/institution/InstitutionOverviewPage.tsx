@@ -627,47 +627,6 @@ export default function InstitutionOverviewPage() {
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 Evaluated against the regulatory reference date applicable to this filing. The resulting applicability status is shown alongside the requirement.
               </p>
-              {/* Quick Fill Test Presets */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('1990-05-15')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  1990-05-15 (&gt;30y)
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('1996-07-01')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  1996-07-01 (=30y)
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('2008-01-10')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  2008-01-10 (&lt;30y)
-                </Button>
-                {completionDate && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setCompletionDate('')}
-                    className="text-[10px] h-5 px-1.5 text-rose-600"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
             </div>
 
             {/* Payment Declaration */}
