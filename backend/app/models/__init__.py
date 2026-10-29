@@ -42,8 +42,9 @@ from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_metadata_observation import DocumentMetadataObservation
 from app.models.digital_signature_check import DigitalSignatureCheck
 
-# Approval workflow, EVC coordination, post-decision obligations and alerts
+# Approval workflow, committee proceedings, EVC coordination, post-decision obligations and alerts
 from app.models.evc_visit import EVCVisit
+from app.models.shc_proceeding import SHCProceeding
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.compliance_obligation import ComplianceObligation
@@ -100,6 +101,7 @@ __all__ = [
     "DigitalSignatureCheck",
     # Approval workflow, post-decision obligations and alerts
     "EVCVisit",
+    "SHCProceeding",
     "WorkflowCase",
     "WorkflowEvent",
     "ComplianceObligation",
