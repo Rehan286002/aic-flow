@@ -594,6 +594,118 @@ export default function WorkflowHubPage() {
                 <button onClick={() => void recordEvcReport()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save EVC report</button>
               </div>}
             </section>}
+
+            {selected.route_snapshot.requires_committee === true && <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-indigo-700"><Gavel className="size-4"/> Standing Hearing Committee</div>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900">SHC hearing &amp; recommendation</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Review of compliance relating to scrutiny, EVC or notice deficiencies.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-700">{selected.shc_proceeding?.status ? stageLabel(selected.shc_proceeding.status) : 'Proceeding not scheduled'}</span>
+              </div>
+
+              {selected.shc_proceeding && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Hearing schedule</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{dateTimeLabel(selected.shc_proceeding.hearing_scheduled_at)}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{selected.shc_proceeding.hearing_mode === 'IN_PERSON' ? 'In person' : selected.shc_proceeding.hearing_mode || 'Mode not recorded'} · Revision {selected.shc_proceeding.schedule_revision}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-600">{selected.shc_proceeding.hearing_details || 'Hearing details not recorded'}</p>
+                </div>
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Notice and schedule references</div>
+                  <p className="mt-1 text-xs text-slate-700">Notice: {selected.shc_proceeding.notice_reference || 'Not provided'}</p>
+                  <p className="mt-1 break-all text-xs text-slate-700">Official schedule: {selected.shc_proceeding.official_schedule_reference || 'Not provided'}</p>
+                  <div className="mt-2 text-[10px] font-semibold uppercase text-slate-500">Institution compliance submission</div>
+                  <p className="mt-1 break-all text-xs text-slate-700">{selected.shc_proceeding.institution_submission_reference || 'Not submitted'}</p>
+                </div>
+                {selected.shc_proceeding.hearing_recorded_at && <div className="rounded-lg border border-slate-100 p-3 sm:col-span-2">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Institution representatives recorded</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div><p className="text-xs font-semibold text-slate-900">{selected.shc_proceeding.representative_one_name}</p><p className="text-[11px] text-slate-500">{selected.shc_proceeding.representative_one_designation}</p></div>
+                    <div><p className="text-xs font-semibold text-slate-900">{selected.shc_proceeding.representative_two_name}</p><p className="text-[11px] text-slate-500">{selected.shc_proceeding.representative_two_designation}</p></div>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-xs text-slate-700">{selected.shc_proceeding.hearing_summary}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Hearing recorded {dateTimeLabel(selected.shc_proceeding.hearing_recorded_at)}</p>
+                </div>}
+                {selected.shc_proceeding.recommendation_recorded_at && <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 sm:col-span-2">
+                  <div className="text-[10px] font-semibold uppercase text-indigo-700">SHC recommendation for Executive Committee</div>
+                  <p className="mt-1 text-xs font-semibold text-slate-900">{selected.shc_proceeding.recommendation_code?.replaceAll('_', ' ')}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.shc_proceeding.recommendation_text}</p>
+                  <p className="mt-1 text-[10px] text-slate-500">Reference: {selected.shc_proceeding.recommendation_reference || 'Not provided'} · Recorded {dateTimeLabel(selected.shc_proceeding.recommendation_recorded_at)}</p>
+                </div>}
+              </div>}
+
+              {selected.current_stage === 'COMMITTEE_PROCEEDINGS' && role === 'COMMITTEE_SECRETARIAT' && (!selected.shc_proceeding || ['PREPARATION', 'SCHEDULED'].includes(selected.shc_proceeding.status)) && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">{selected.shc_proceeding?.status === 'SCHEDULED' ? 'Revise hearing schedule' : 'Schedule SHC hearing'}</h4>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Hearing mode
+                    <select value={shcHearingMode} onChange={(e) => setShcHearingMode(e.target.value as 'ONLINE' | 'IN_PERSON')} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="ONLINE">Online</option><option value="IN_PERSON">In person</option></select>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Hearing date and time
+                    <input type="datetime-local" value={shcHearingAt} onChange={(e) => setShcHearingAt(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Show Cause Notice / notice reference (optional)
+                    <input value={shcNoticeReference} onChange={(e) => setShcNoticeReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Official hearing schedule reference (optional)
+                    <input value={shcOfficialReference} onChange={(e) => setShcOfficialReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                </div>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Hearing details
+                  <textarea value={shcHearingDetails} onChange={(e) => setShcHearingDetails(e.target.value)} rows={2} placeholder="Venue or online hearing instructions" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <button onClick={() => void scheduleShc()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{selected.shc_proceeding?.status === 'SCHEDULED' ? 'Save revised hearing schedule' : 'Schedule SHC hearing'}</button>
+              </div>}
+
+              {selected.shc_proceeding?.status === 'SCHEDULED' && role === 'INSTITUTION_USER' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">Submit compliance material for the hearing</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">Enter the reference for the compliance documents and supporting material submitted for SHC consideration.</p>
+                <label className="mt-3 grid gap-1 text-[11px] font-medium text-slate-600">Submission / document reference
+                  <input value={shcSubmissionReference} onChange={(e) => setShcSubmissionReference(e.target.value)} placeholder="Submission acknowledgement or document reference" className="h-9 rounded-lg border border-slate-200 px-3 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Submission note
+                  <textarea value={shcSubmissionNote} onChange={(e) => setShcSubmissionNote(e.target.value)} rows={2} placeholder="Describe the compliance material submitted" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <button onClick={() => void submitShcCompliance()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Record compliance submission</button>
+              </div>}
+
+              {selected.shc_proceeding?.status === 'SCHEDULED' && role === 'COMMITTEE_SECRETARIAT' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">Record SHC hearing</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">Record the two institution representatives and the hearing proceedings.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 1 name<input value={shcRepOneName} onChange={(e) => setShcRepOneName(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 1 designation<input value={shcRepOneDesignation} onChange={(e) => setShcRepOneDesignation(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 2 name<input value={shcRepTwoName} onChange={(e) => setShcRepTwoName(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 2 designation<input value={shcRepTwoDesignation} onChange={(e) => setShcRepTwoDesignation(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                </div>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Hearing proceedings summary<textarea value={shcHearingSummary} onChange={(e) => setShcHearingSummary(e.target.value)} rows={3} placeholder="Summarise the institution's presentation and compliance material considered" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/></label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Record note<textarea value={shcHearingNote} onChange={(e) => setShcHearingNote(e.target.value)} rows={2} placeholder="Add a note for the proceeding history" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/></label>
+                <button onClick={() => void recordShcHearing()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save hearing record</button>
+              </div>}
+
+              {selected.shc_proceeding?.status === 'HEARING_RECORDED' && role === 'COMMITTEE_SECRETARIAT' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">Record SHC recommendation</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">This recommendation is placed before the Executive Committee; it is not the statutory decision.</p>
+                <label className="mt-3 grid gap-1 text-[11px] font-medium text-slate-600">Recommendation category
+                  <select value={shcRecommendationCode} onChange={(e) => setShcRecommendationCode(e.target.value as typeof shcRecommendationCode)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
+                    <option value="COMPLIANCE_REVIEWED">Compliance reviewed</option>
+                    <option value="FURTHER_COMPLIANCE_REQUIRED">Further compliance required</option>
+                    <option value="DEFICIENCIES_REMAIN">Deficiencies remain</option>
+                    <option value="INCONCLUSIVE">Inconclusive</option>
+                  </select>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Recommendation and reasons
+                  <textarea value={shcRecommendationText} onChange={(e) => setShcRecommendationText(e.target.value)} rows={4} placeholder="Record the committee's recommendation and reasons for Executive Committee consideration" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Recommendation reference (optional)
+                  <input value={shcRecommendationReference} onChange={(e) => setShcRecommendationReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-xs"/>
+                </label>
+                <button onClick={() => void recordShcRecommendation()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Submit SHC recommendation</button>
+              </div>}
+
+              {selected.shc_proceeding?.status === 'RECOMMENDATION_RECORDED' && <p className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-800">SHC recommendation is recorded and ready for Executive Committee consideration.</p>}
+            </section>}
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Case dossier</div><h2 className="mt-1 text-lg font-bold text-slate-900">{selected.application_number}</h2><p className="text-sm text-slate-600">{selected.institution_name} · {selected.process_type}</p></div><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{stageLabel(selected.current_stage)}</span></div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Route</span><div className="mt-0.5 font-semibold text-slate-800">{selected.route_code}</div></div><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Regulatory baseline</span><div className="mt-0.5 font-semibold text-slate-800">{selected.regulatory_version}</div></div></div>
