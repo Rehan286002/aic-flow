@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.checklist import ApplicationRequirementResponse
 
@@ -66,10 +66,72 @@ class ComplianceObligationResponse(BaseModel):
     updated_at: datetime
 
 
+class EVCVisitResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    evc_visit_id: uuid.UUID
+    workflow_case_id: uuid.UUID
+    application_id: uuid.UUID
+    status: str
+    visit_mode: str | None = None
+    scheduled_start_at: datetime | None = None
+    scheduled_end_at: datetime | None = None
+    venue_or_meeting_details: str | None = None
+    official_schedule_reference: str | None = None
+    institution_contact_name: str | None = None
+    institution_contact_email: str | None = None
+    coordination_note: str | None = None
+    schedule_revision: int
+    report_reference: str | None = None
+    report_summary: str | None = None
+    report_outcome: str | None = None
+    report_recorded_by: uuid.UUID | None = None
+    report_recorded_at: datetime | None = None
+    cancellation_reason: str | None = None
+    created_by: uuid.UUID
+    updated_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class EVCVisitScheduleRequest(BaseModel):
+    visit_mode: Literal["ONLINE", "OFFLINE"]
+    scheduled_start_at: datetime
+    scheduled_end_at: datetime | None = None
+    venue_or_meeting_details: str = Field(min_length=5, max_length=2000)
+    official_schedule_reference: str | None = Field(default=None, max_length=180)
+    institution_contact_name: str | None = Field(default=None, max_length=160)
+    institution_contact_email: str | None = Field(default=None, max_length=254)
+    coordination_note: str = Field(min_length=8, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        if self.scheduled_start_at.tzinfo is None or self.scheduled_start_at.utcoffset() is None:
+            raise ValueError("EVC schedule start must include a timezone.")
+        if self.scheduled_end_at is not None:
+            if self.scheduled_end_at.tzinfo is None or self.scheduled_end_at.utcoffset() is None:
+                raise ValueError("EVC schedule end must include a timezone.")
+            if self.scheduled_end_at <= self.scheduled_start_at:
+                raise ValueError("EVC schedule end must be later than its start.")
+        return self
+
+
+class EVCVisitReportRequest(BaseModel):
+    report_reference: str = Field(min_length=3, max_length=180)
+    report_summary: str = Field(min_length=10, max_length=6000)
+    report_outcome: Literal["COMPLIANT", "DEFICIENCIES_OBSERVED", "FOLLOW_UP_REQUIRED", "INCONCLUSIVE"]
+    note: str = Field(min_length=8, max_length=2000)
+
+
+class EVCVisitCancelRequest(BaseModel):
+    reason: str = Field(min_length=8, max_length=2000)
+
+
 class WorkflowCaseDetailResponse(WorkflowCaseListResponse):
     requirements: list[ApplicationRequirementResponse] = Field(default_factory=list)
     events: list[WorkflowEventResponse] = Field(default_factory=list)
     obligations: list[ComplianceObligationResponse] = Field(default_factory=list)
+    evc_visit: EVCVisitResponse | None = None
 
 
 class WorkflowTransitionRequest(BaseModel):
@@ -80,8 +142,6 @@ class WorkflowTransitionRequest(BaseModel):
 
 class WorkflowEventCreateRequest(BaseModel):
     event_type: Literal[
-        "EVC_VISIT_SCHEDULED",
-        "EVC_REPORT_RECORDED",
         "COMMITTEE_CONVENED",
         "COMMITTEE_MINUTES_RECORDED",
         "OFFICER_NOTE",
