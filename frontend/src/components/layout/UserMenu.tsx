@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 export function UserMenu() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const { currentRoleConfig } = useDemoRole();
+  const { currentRoleConfig } = useWorkspaceRole();
 
   const handleLogout = async () => {
     try {
