@@ -265,6 +265,7 @@ def seed_application_and_document(db, institution, institution_user, review_team
             )
         # The default baseline case is intentionally unassigned. Individual tests
         # assign it to a reviewer team when exercising team-scoped access.
+        application.review_team_id = None
 
     revision = db.scalar(
         select(ApplicationRevision).where(
