@@ -20,7 +20,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) {
-  const { currentRole, currentRoleConfig, sidebarCollapsed, toggleSidebar } = useDemoRole();
+  const { currentRole, currentRoleConfig, sidebarCollapsed, toggleSidebar } = useWorkspaceRole();
   const navItems = ROLE_NAVIGATION[currentRole] || [];
 
   const isCollapsed = !isMobileSheet && sidebarCollapsed;
