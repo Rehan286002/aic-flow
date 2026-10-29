@@ -165,7 +165,7 @@ export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) 
                 <Sparkles className="size-3 text-indigo-400" />
                 <span>Academic Year 2026-27</span>
               </span>
-              <span className="font-mono text-[10px] text-slate-400">SIH 26262</span>
+              <span className="font-mono text-[10px] text-slate-400">AICTE</span>
             </div>
 
             {!isMobileSheet && (
