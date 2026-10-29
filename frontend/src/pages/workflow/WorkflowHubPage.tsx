@@ -194,6 +194,86 @@ export default function WorkflowHubPage() {
     finally { setBusy(false); }
   };
 
+
+  const scheduleEvc = async () => {
+    if (!selected || !evcStartAt || evcVenue.trim().length < 5 || evcCoordinationNote.trim().length < 8) {
+      toast.error('Enter a visit date and time, venue or meeting details, and a coordination note.');
+      return;
+    }
+    const start = new Date(evcStartAt);
+    const end = evcEndAt ? new Date(evcEndAt) : null;
+    if (Number.isNaN(start.getTime()) || (end && (Number.isNaN(end.getTime()) || end <= start))) {
+      toast.error('Check the visit date and time range.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.scheduleEvcVisit(selected.workflow_case_id, {
+        visit_mode: evcMode,
+        scheduled_start_at: start.toISOString(),
+        scheduled_end_at: end ? end.toISOString() : null,
+        venue_or_meeting_details: evcVenue.trim(),
+        official_schedule_reference: evcOfficialReference.trim() || null,
+        institution_contact_name: evcContactName.trim() || null,
+        institution_contact_email: evcContactEmail.trim() || null,
+        coordination_note: evcCoordinationNote.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setEvcCoordinationNote('');
+      await refresh();
+      toast.success('EVC visit schedule saved.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save the EVC visit schedule.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordEvcReport = async () => {
+    if (!selected?.evc_visit || evcReportReference.trim().length < 3 || evcReportSummary.trim().length < 10 || evcReportNote.trim().length < 8) {
+      toast.error('Enter the report reference, visit observations and recording note.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordEvcReport(selected.evc_visit.evc_visit_id, {
+        report_reference: evcReportReference.trim(),
+        report_summary: evcReportSummary.trim(),
+        report_outcome: evcReportOutcome,
+        note: evcReportNote.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setEvcReportReference('');
+      setEvcReportSummary('');
+      setEvcReportNote('');
+      await refresh();
+      toast.success('EVC report recorded in the case history.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the EVC report.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelEvc = async () => {
+    if (!selected?.evc_visit || evcCancelReason.trim().length < 8) {
+      toast.error('Enter a reason of at least 8 characters.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.cancelEvcVisit(selected.evc_visit.evc_visit_id, evcCancelReason.trim());
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setEvcCancelReason('');
+      await refresh();
+      toast.success('EVC visit cancelled. A revised schedule can be recorded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not cancel the EVC visit.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createCondition = async () => {
     if (!selected || !conditionTitle || !conditionDescription || !conditionSource || !conditionDue) { toast.error('Complete all condition fields.'); return; }
     setBusy(true);
@@ -303,8 +383,6 @@ export default function WorkflowHubPage() {
               {role === 'INTAKE_OFFICER' && selected.current_stage === 'SUBMITTED' && selected.assigned_role_code === 'INTAKE_OFFICER' && !selected.assigned_user_id && teamId && <button onClick={() => void assignCase()} disabled={busy} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Assign to my review team</button>}
               <div className="mt-4 space-y-2"><label className="text-xs font-semibold text-slate-700">Action reason / case note</label><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Record the reason, instruction or review note..." className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"/>
                 <div className="flex flex-wrap gap-2">{nextStages.map((stage) => <button key={stage} onClick={() => void transition(stage)} disabled={busy} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{stageLabel(stage)}</button>)}</div>
-                {role === 'EVC_COORDINATOR' && selected.current_stage === 'EVC_COORDINATION' && <button onClick={() => void recordEvent('EVC_VISIT_SCHEDULED', 'Enter the scheduling note first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Record EVC schedule</button>}
-                {role === 'EVC_MEMBER' && selected.current_stage === 'EVC_SCHEDULED' && <button onClick={() => void recordEvent('EVC_REPORT_RECORDED', 'Enter the visit report summary first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Record EVC report</button>}
                 {role === 'COMMITTEE_SECRETARIAT' && selected.current_stage === 'COMMITTEE_PROCEEDINGS' && <div className="flex gap-2"><button onClick={() => void recordEvent('COMMITTEE_CONVENED', 'Enter the SHC convening note first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Record SHC convening</button><button onClick={() => void recordEvent('COMMITTEE_MINUTES_RECORDED', 'Enter the SHC minutes reference first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Record SHC minutes</button></div>}
               </div>
             </div>
