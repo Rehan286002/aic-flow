@@ -123,7 +123,7 @@ def create_application_draft(
 ) -> ApplicationDetailResponse:
     """Create an atomic draft application, Revision #1, status history, and 7 requirements.
 
-    Enforces the single-application prototype boundary per (institution, AY, family).
+    Enforces one application per institution, academic year, application family and process category.
     """
     # 1. Enforce single application per institution, AY, and family
     existing_app = db.scalar(
