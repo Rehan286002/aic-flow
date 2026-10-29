@@ -8,7 +8,7 @@ transition may move the case to its next stage.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -22,6 +22,7 @@ from app.models.enums import RevisionStatus
 from app.models.enums import ApplicationStatus
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
+from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
 from app.models.in_app_notification import InAppNotification
 from app.models.institution_membership import InstitutionMembership
@@ -273,6 +274,79 @@ def cancel_evc_visit(
         },
     )
     return visit
+
+
+def record_executive_committee_decision(
+    db: Session,
+    case: WorkflowCase,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    outcome_code: str,
+    decision_reference: str,
+    decision_reasons: str,
+    speaking_order_reference: str,
+    speaking_order_uploaded_at: datetime,
+) -> ExecutiveCommitteeDecision:
+    """Persist the EC outcome, calculate its appeal window and move the case atomically."""
+    if role_code != "COMPETENT_AUTHORITY":
+        raise HTTPException(status_code=403, detail="Only the authorised Competent Authority may record the Executive Committee decision.")
+    if case.current_stage != "AWAITING_AUTHORITY":
+        raise HTTPException(status_code=409, detail="The case must be at Executive Committee decision before recording the outcome.")
+    existing = db.scalar(
+        select(ExecutiveCommitteeDecision)
+        .where(ExecutiveCommitteeDecision.workflow_case_id == case.workflow_case_id)
+        .with_for_update()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="An Executive Committee decision is already recorded for this case.")
+    if speaking_order_uploaded_at.tzinfo is None or speaking_order_uploaded_at.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Speaking Order upload time must include a timezone.")
+    uploaded_at = speaking_order_uploaded_at.astimezone(UTC)
+    now = datetime.now(UTC)
+    if uploaded_at > now:
+        raise HTTPException(status_code=422, detail="Speaking Order upload time cannot be in the future.")
+    if uploaded_at < case.stage_entered_at:
+        raise HTTPException(status_code=422, detail="Speaking Order upload time cannot be earlier than the Executive Committee decision stage.")
+
+    decision = ExecutiveCommitteeDecision(
+        workflow_case_id=case.workflow_case_id,
+        application_id=case.application_id,
+        outcome_code=outcome_code,
+        decision_reference=decision_reference.strip(),
+        decision_reasons=decision_reasons.strip(),
+        speaking_order_reference=speaking_order_reference.strip(),
+        speaking_order_uploaded_at=uploaded_at,
+        appeal_deadline_at=uploaded_at + timedelta(days=7),
+        recorded_by=actor_user_id,
+    )
+    db.add(decision)
+    db.flush()
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="EXECUTIVE_COMMITTEE_DECISION_RECORDED",
+        summary=f"Executive Committee decision {decision_reference.strip()} recorded as {outcome_code.replace('_', ' ')}.",
+        event_payload={
+            "decision_id": str(decision.executive_committee_decision_id),
+            "outcome_code": outcome_code,
+            "decision_reference": decision.decision_reference,
+            "speaking_order_reference": decision.speaking_order_reference,
+            "speaking_order_uploaded_at": uploaded_at.isoformat(),
+            "appeal_deadline_at": decision.appeal_deadline_at.isoformat(),
+            "decision_reasons": decision.decision_reasons,
+        },
+    )
+    transition_case(
+        db,
+        case,
+        actor_user_id,
+        role_code,
+        outcome_code,
+        f"Executive Committee decision {decision_reference.strip()} recorded. {decision_reasons.strip()}",
+    )
+    return decision
 
 
 def validate_shc_stage(case: WorkflowCase) -> None:
