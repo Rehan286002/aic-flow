@@ -3,7 +3,15 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.services.workflow_service import case_access_context, intake_review_assignee, route_profile_for, validate_operational_event, validate_transition
+from app.services.workflow_service import (
+    case_access_context,
+    intake_review_assignee,
+    route_profile_for,
+    validate_evc_report_stage,
+    validate_evc_schedule_stage,
+    validate_operational_event,
+    validate_transition,
+)
 
 
 def case(stage: str, route: dict):
@@ -78,17 +86,36 @@ def test_eoa_supervisory_hold_returns_to_intake_not_scrutiny():
     validate_transition(case("ON_HOLD", snapshot), "BUREAU_SUPERVISOR", "INTAKE_REVIEW")
 
 
-def test_evc_schedule_event_is_restricted_to_coordination_stage():
-    validate_operational_event(case("EVC_COORDINATION", {}), "EVC_VISIT_SCHEDULED")
+def test_evc_schedule_requires_route_applicability_and_coordination_stage():
+    validate_evc_schedule_stage(case("EVC_COORDINATION", {"requires_evc": True}))
+    validate_evc_schedule_stage(case("EVC_SCHEDULED", {"requires_evc": True}), SimpleNamespace(status="SCHEDULED"))
     with pytest.raises(HTTPException) as exc:
-        validate_operational_event(case("SCRUTINY", {}), "EVC_VISIT_SCHEDULED")
+        validate_evc_schedule_stage(case("SCRUTINY", {"requires_evc": True}))
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_schedule_stage(case("EVC_COORDINATION", {"requires_evc": False}))
     assert exc.value.status_code == 409
 
 
-def test_evc_report_event_is_restricted_to_scheduled_stage():
-    validate_operational_event(case("EVC_SCHEDULED", {}), "EVC_REPORT_RECORDED")
+def test_evc_completed_visit_cannot_be_rescheduled():
     with pytest.raises(HTTPException) as exc:
-        validate_operational_event(case("EVC_COORDINATION", {}), "EVC_REPORT_RECORDED")
+        validate_evc_schedule_stage(
+            case("EVC_SCHEDULED", {"requires_evc": True}),
+            SimpleNamespace(status="COMPLETED"),
+        )
+    assert exc.value.status_code == 409
+
+
+def test_evc_report_requires_a_current_scheduled_visit():
+    validate_evc_report_stage(
+        case("EVC_SCHEDULED", {"requires_evc": True}),
+        SimpleNamespace(status="SCHEDULED"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_report_stage(case("EVC_SCHEDULED", {}), None)
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_report_stage(case("EVC_COORDINATION", {}), SimpleNamespace(status="SCHEDULED"))
     assert exc.value.status_code == 409
 
 
