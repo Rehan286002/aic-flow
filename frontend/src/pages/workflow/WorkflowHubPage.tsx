@@ -100,7 +100,7 @@ export default function WorkflowHubPage() {
         item.current_stage, item.route_code,
       ].some((value) => value.toLowerCase().includes(query));
       const matchesFilter = queueFilter === 'ALL'
-        || (queueFilter === 'OPEN' && !['CLOSED', 'APPROVED', 'REJECTED'].includes(item.current_stage))
+        || (queueFilter === 'OPEN' && item.current_stage !== 'CLOSED')
         || (queueFilter === 'ACTION' && item.assigned_role_code === role
           && (!item.assigned_user_id || item.assigned_user_id === auth.user?.user_id));
       return matchesQuery && matchesFilter;
@@ -259,8 +259,8 @@ export default function WorkflowHubPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Cases in your scope</div><div className="mt-1 text-2xl font-bold text-slate-900">{cases.length}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Awaiting action</div><div className="mt-1 text-2xl font-bold text-amber-600">{cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).length}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Oldest active case</div><div className="mt-1 text-2xl font-bold text-slate-900">{cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).length ? Math.max(...cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).map((c) => stageAgeDays(c.stage_entered_at))) : 0}<span className="ml-1 text-xs font-medium text-slate-500">days</span></div></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Awaiting action</div><div className="mt-1 text-2xl font-bold text-amber-600">{cases.filter((c) => c.current_stage !== 'CLOSED').length}</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Oldest active case</div><div className="mt-1 text-2xl font-bold text-slate-900">{cases.filter((c) => c.current_stage !== 'CLOSED').length ? Math.max(...cases.filter((c) => c.current_stage !== 'CLOSED').map((c) => stageAgeDays(c.stage_entered_at))) : 0}<span className="ml-1 text-xs font-medium text-slate-500">days</span></div></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-1 text-xs font-medium text-slate-500"><Bell className="size-3.5"/> Unread notifications</div><div className="mt-1 text-2xl font-bold text-indigo-700">{notifications.filter((n) => !n.read_at).length}</div></div>
       </div>
 
