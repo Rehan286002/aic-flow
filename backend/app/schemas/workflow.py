@@ -95,6 +95,8 @@ class EVCVisitResponse(BaseModel):
 
 
 class EVCVisitScheduleRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     visit_mode: Literal["ONLINE", "OFFLINE"]
     scheduled_start_at: datetime
     scheduled_end_at: datetime | None = None
@@ -117,13 +119,17 @@ class EVCVisitScheduleRequest(BaseModel):
 
 
 class EVCVisitReportRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     report_reference: str = Field(min_length=3, max_length=180)
     report_summary: str = Field(min_length=10, max_length=6000)
-    report_outcome: Literal["COMPLIANT", "DEFICIENCIES_OBSERVED", "FOLLOW_UP_REQUIRED", "INCONCLUSIVE"]
+    report_outcome: Literal["NO_DEFICIENCY_RECORDED", "DEFICIENCIES_OBSERVED", "FOLLOW_UP_REQUIRED", "INCONCLUSIVE"]
     note: str = Field(min_length=8, max_length=2000)
 
 
 class EVCVisitCancelRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     reason: str = Field(min_length=8, max_length=2000)
 
 
