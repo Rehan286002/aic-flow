@@ -282,6 +282,15 @@ def validate_transition(case: WorkflowCase, role_code: str, to_stage: str) -> No
             )
 
 
+def intake_review_assignee(route_snapshot: dict[str, Any] | None) -> str:
+    """Resolve the receiving role after intake using the case's immutable route snapshot."""
+    return (
+        "SCRUTINY_OFFICER"
+        if (route_snapshot or {}).get("requires_scrutiny") is True
+        else "INTAKE_OFFICER"
+    )
+
+
 def transition_case(
     db: Session,
     case: WorkflowCase,
@@ -305,12 +314,7 @@ def transition_case(
     if to_stage == "SUBMITTED":
         case.assigned_role_code = "INTAKE_OFFICER"
     elif to_stage == "INTAKE_REVIEW":
-        # EOA self-disclosure routes continue with intake; scrutiny routes hand off.
-        case.assigned_role_code = (
-            "SCRUTINY_OFFICER"
-            if (case.route_snapshot or {}).get("requires_scrutiny") is True
-            else "INTAKE_OFFICER"
-        )
+        case.assigned_role_code = intake_review_assignee(case.route_snapshot)
     elif to_stage == "SCRUTINY":
         case.assigned_role_code = "SCRUTINY_OFFICER"
     elif to_stage == "EVC_COORDINATION":
