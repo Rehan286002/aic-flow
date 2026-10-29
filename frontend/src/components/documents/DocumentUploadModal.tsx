@@ -123,7 +123,7 @@ export function DocumentUploadModal({
         onUploadSuccess(res);
       } else {
         toast.warning('File safety check needs attention', {
-          description: 'Document placed in quarantine pending scan retry.',
+          description: 'The required safety check could not be completed. The file has not been added to application evidence.',
         });
         onUploadSuccess(res);
       }
@@ -272,11 +272,10 @@ export function DocumentUploadModal({
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-amber-900">
                     <AlertTriangle className="size-5 text-amber-600" />
-                    <span>Scan Error: Quarantined</span>
+                    <span>File check pending</span>
                   </div>
                   <p className="text-amber-800 text-[11px]">
-                    Antivirus scanner timed out or returned an error. File remains in quarantine
-                    and can be retried from the version history.
+                    The file could not complete the required safety check and has not been added to application evidence. Please retry later or contact support.
                   </p>
                 </div>
               )}
