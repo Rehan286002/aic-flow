@@ -62,7 +62,7 @@ export default function WorkflowHubPage() {
   const [evcCoordinationNote, setEvcCoordinationNote] = useState('');
   const [evcReportReference, setEvcReportReference] = useState('');
   const [evcReportSummary, setEvcReportSummary] = useState('');
-  const [evcReportOutcome, setEvcReportOutcome] = useState<'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE'>('INCONCLUSIVE');
+  const [evcReportOutcome, setEvcReportOutcome] = useState<'NO_DEFICIENCY_RECORDED' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE'>('INCONCLUSIVE');
   const [evcReportNote, setEvcReportNote] = useState('');
   const [evcCancelReason, setEvcCancelReason] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
@@ -462,7 +462,7 @@ export default function WorkflowHubPage() {
                   </label>
                   <label className="grid gap-1 text-[11px] font-medium text-slate-600">Report outcome
                     <select value={evcReportOutcome} onChange={(e) => setEvcReportOutcome(e.target.value as typeof evcReportOutcome)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
-                      <option value="INCONCLUSIVE">Inconclusive</option><option value="COMPLIANT">Compliant observations</option><option value="DEFICIENCIES_OBSERVED">Deficiencies observed</option><option value="FOLLOW_UP_REQUIRED">Follow-up required</option>
+                      <option value="INCONCLUSIVE">Inconclusive</option><option value="NO_DEFICIENCY_RECORDED">No deficiency recorded</option><option value="DEFICIENCIES_OBSERVED">Deficiencies observed</option><option value="FOLLOW_UP_REQUIRED">Follow-up required</option>
                     </select>
                   </label>
                 </div>
