@@ -216,6 +216,8 @@ def record_evc_visit_report(
     validate_evc_report_stage(case, visit)
     assert visit is not None
     now = datetime.now(UTC)
+    if visit.scheduled_start_at is not None and visit.scheduled_start_at > now:
+        raise HTTPException(status_code=409, detail="The EVC visit report can be recorded once the scheduled visit has started.")
     visit.status = "COMPLETED"
     visit.report_reference = report_reference.strip()
     visit.report_summary = report_summary.strip()
@@ -480,6 +482,12 @@ def transition_case(
         case.assigned_role_code = "EVC_COORDINATOR"
     elif to_stage == "EVC_SCHEDULED":
         case.assigned_role_code = "EVC_MEMBER"
+    elif to_stage == "EVC_COMPLETED":
+        case.assigned_role_code = (
+            "COMMITTEE_SECRETARIAT"
+            if (case.route_snapshot or {}).get("requires_committee") is True
+            else "REGIONAL_OFFICER"
+        )
     elif to_stage == "COMMITTEE_PROCEEDINGS":
         case.assigned_role_code = "COMMITTEE_SECRETARIAT"
     elif to_stage in {"AWAITING_AUTHORITY", "APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED", "ON_HOLD"}:
