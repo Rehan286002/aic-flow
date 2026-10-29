@@ -59,7 +59,7 @@ export interface EVCVisit {
   schedule_revision: number;
   report_reference: string | null;
   report_summary: string | null;
-  report_outcome: 'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE' | null;
+  report_outcome: 'NO_DEFICIENCY_RECORDED' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE' | null;
   report_recorded_by: string | null;
   report_recorded_at: string | null;
   cancellation_reason: string | null;
@@ -113,7 +113,7 @@ export const workflowApi = {
   recordEvcReport: (visitId: string, payload: {
     report_reference: string;
     report_summary: string;
-    report_outcome: 'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE';
+    report_outcome: 'NO_DEFICIENCY_RECORDED' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE';
     note: string;
   }) => request<EVCVisit>(`/api/v1/workflow/evc-visits/${visitId}/report`, {
     method: 'POST', body: JSON.stringify(payload),
