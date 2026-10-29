@@ -375,6 +375,106 @@ export default function WorkflowHubPage() {
 
         <section className="space-y-4">
           {selected ? <>
+
+            {selected.route_snapshot.requires_evc === true && <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-indigo-700"><CalendarClock className="size-4"/> EVC visit coordination</div>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900">Visit schedule &amp; report</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Coordination records and report traceability for this application.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-700">{selected.evc_visit?.status ? stageLabel(selected.evc_visit.status) : 'Not scheduled'}</span>
+              </div>
+
+              {selected.evc_visit && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500"><CalendarClock className="size-3.5"/> Scheduled visit</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{dateTimeLabel(selected.evc_visit.scheduled_start_at)}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{selected.evc_visit.scheduled_end_at ? 'Until ' + dateTimeLabel(selected.evc_visit.scheduled_end_at) : 'End time not recorded'} · Revision {selected.evc_visit.schedule_revision}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500">{selected.evc_visit.visit_mode === 'ONLINE' ? <Video className="size-3.5"/> : <MapPin className="size-3.5"/>} Visit mode &amp; venue</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.evc_visit.visit_mode || 'Awaiting details'}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-[11px] text-slate-600">{selected.evc_visit.venue_or_meeting_details || 'Venue or meeting details not recorded'}</p>
+                </div>
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Official schedule reference</div>
+                  <p className="mt-1 break-all text-xs text-slate-800">{selected.evc_visit.official_schedule_reference || 'Not provided'}</p>
+                  <div className="mt-2 text-[10px] font-semibold uppercase text-slate-500">Institution contact</div>
+                  <p className="mt-1 text-xs text-slate-800">{selected.evc_visit.institution_contact_name || 'Not provided'}{selected.evc_visit.institution_contact_email ? ' · ' + selected.evc_visit.institution_contact_email : ''}</p>
+                </div>
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500"><FileCheck className="size-3.5"/> Visit report</div>
+                  {selected.evc_visit.report_reference ? <>
+                    <p className="mt-1 text-xs font-semibold text-slate-900">{selected.evc_visit.report_reference}</p>
+                    <p className="mt-1 text-[11px] text-slate-600">{selected.evc_visit.report_outcome?.replaceAll('_', ' ')}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-600">{selected.evc_visit.report_summary}</p>
+                    <p className="mt-1 text-[10px] text-slate-400">Recorded {dateTimeLabel(selected.evc_visit.report_recorded_at)}</p>
+                  </> : <p className="mt-1 text-xs text-slate-500">Report not yet recorded</p>}
+                </div>
+              </div>}
+
+              {selected.evc_visit?.status === 'DETAILS_REQUIRED' && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">Complete the visit details before progressing this case. The earlier schedule note remains in the case history.</p>}
+              {selected.evc_visit?.status === 'CANCELLED' && <p className="mt-3 rounded-lg border border-rose-100 bg-rose-50 p-2.5 text-xs text-rose-800">Previous visit cancelled: {selected.evc_visit.cancellation_reason}</p>}
+
+              {['EVC_COORDINATOR', 'REGIONAL_OFFICER', 'LEAD_AUDITOR'].includes(role) && ['EVC_COORDINATION', 'EVC_SCHEDULED'].includes(selected.current_stage) && selected.evc_visit?.status !== 'COMPLETED' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">{selected.evc_visit?.status === 'SCHEDULED' ? 'Reschedule visit' : 'Schedule visit'}</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">Record the visit details communicated for this application.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Visit mode
+                    <select value={evcMode} onChange={(e) => setEvcMode(e.target.value as 'ONLINE' | 'OFFLINE')} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="ONLINE">Online</option><option value="OFFLINE">Offline</option></select>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Visit start
+                    <input type="datetime-local" value={evcStartAt} onChange={(e) => setEvcStartAt(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Visit end (optional)
+                    <input type="datetime-local" value={evcEndAt} onChange={(e) => setEvcEndAt(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Official schedule reference (optional)
+                    <input value={evcOfficialReference} onChange={(e) => setEvcOfficialReference(e.target.value)} placeholder="Reference from the official portal" className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Institution contact name (optional)
+                    <input value={evcContactName} onChange={(e) => setEvcContactName(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Institution contact email (optional)
+                    <input type="email" value={evcContactEmail} onChange={(e) => setEvcContactEmail(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                </div>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Venue or meeting details
+                  <textarea value={evcVenue} onChange={(e) => setEvcVenue(e.target.value)} rows={2} placeholder="Physical venue or online meeting instructions" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Coordination note
+                  <textarea value={evcCoordinationNote} onChange={(e) => setEvcCoordinationNote(e.target.value)} rows={2} placeholder="Record the coordination instruction or schedule communication" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <button onClick={() => void scheduleEvc()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{selected.evc_visit?.status === 'SCHEDULED' ? 'Save revised schedule' : 'Save visit schedule'}</button>
+                {selected.evc_visit?.status === 'SCHEDULED' && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input value={evcCancelReason} onChange={(e) => setEvcCancelReason(e.target.value)} placeholder="Reason for cancelling the visit" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                  <button onClick={() => void cancelEvc()} disabled={busy} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50">Cancel visit</button>
+                </div>}
+              </div>}
+
+              {['EVC_MEMBER', 'EVC_COORDINATOR'].includes(role) && selected.current_stage === 'EVC_SCHEDULED' && selected.evc_visit?.status === 'SCHEDULED' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">Record EVC visit report</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">Enter the report reference, observations and outcome category. The statutory decision remains separate.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Report reference
+                    <input value={evcReportReference} onChange={(e) => setEvcReportReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Report outcome
+                    <select value={evcReportOutcome} onChange={(e) => setEvcReportOutcome(e.target.value as typeof evcReportOutcome)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
+                      <option value="INCONCLUSIVE">Inconclusive</option><option value="COMPLIANT">Compliant observations</option><option value="DEFICIENCIES_OBSERVED">Deficiencies observed</option><option value="FOLLOW_UP_REQUIRED">Follow-up required</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Visit observations
+                  <textarea value={evcReportSummary} onChange={(e) => setEvcReportSummary(e.target.value)} rows={3} placeholder="Summarise the observations recorded during the EVC visit" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Report recording note
+                  <textarea value={evcReportNote} onChange={(e) => setEvcReportNote(e.target.value)} rows={2} placeholder="Add a note about recording this report" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <button onClick={() => void recordEvcReport()} disabled={busy} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save EVC report</button>
+              </div>}
+            </section>}
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Case dossier</div><h2 className="mt-1 text-lg font-bold text-slate-900">{selected.application_number}</h2><p className="text-sm text-slate-600">{selected.institution_name} · {selected.process_type}</p></div><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{stageLabel(selected.current_stage)}</span></div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Route</span><div className="mt-0.5 font-semibold text-slate-800">{selected.route_code}</div></div><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Regulatory baseline</span><div className="mt-0.5 font-semibold text-slate-800">{selected.regulatory_version}</div></div></div>
