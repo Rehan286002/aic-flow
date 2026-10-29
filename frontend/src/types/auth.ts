@@ -71,31 +71,28 @@ export function getRoleContextKey(rc: RoleContext): string {
 }
 
 export function formatRoleContextLabel(rc: RoleContext): string {
-  const teamSuffix = rc.review_team_id ? ` · Team ${rc.review_team_id.slice(0, 8)}` : '';
   switch (rc.role_code) {
     case 'INSTITUTION_USER':
-      return rc.institution_id
-        ? `Institution · ${rc.institution_id.slice(0, 8)}`
-        : 'Institution Representative';
+      return 'Institution Representative';
     case 'INTAKE_OFFICER':
-      return `Intake / Registry Officer${teamSuffix}`;
+      return 'Intake / Registry Officer';
     case 'SCRUTINY_OFFICER':
     case 'AUDITOR':
-      return `Scrutiny / Processing Officer${teamSuffix}`;
+      return 'Scrutiny / Processing Officer';
     case 'REGIONAL_OFFICER':
-      return `Regional Officer / Coordinator${teamSuffix}`;
+      return 'Regional Officer / Coordinator';
     case 'EVC_COORDINATOR':
-      return `EVC Coordinator${teamSuffix}`;
+      return 'EVC Coordinator';
     case 'EVC_MEMBER':
-      return `EVC Assigned Participant${teamSuffix}`;
+      return 'EVC Assigned Participant';
     case 'COMMITTEE_SECRETARIAT':
-      return `Standing Hearing Committee Secretariat${teamSuffix}`;
+      return 'Standing Hearing Committee Secretariat';
     case 'BUREAU_SUPERVISOR':
-      return `Bureau Supervisor${teamSuffix}`;
+      return 'Bureau Supervisor';
     case 'COMPETENT_AUTHORITY':
-      return `Competent Authority${teamSuffix}`;
+      return 'Competent Authority';
     case 'LEAD_AUDITOR':
-      return `Senior / Lead Officer${teamSuffix}`;
+      return 'Senior / Lead Officer';
     case 'REGULATORY_POLICY_PUBLISHER':
       return 'Regulatory Policy Publisher / Approver';
     case 'ADMIN':
