@@ -182,7 +182,7 @@ export function DocumentTextExtractionModal({
                           : 'bg-amber-100 text-amber-800'
                       }`}
                     >
-                      {p.extraction_method === 'NATIVE_TEXT' ? 'PDF' : 'OCR'}
+                      {p.extraction_method === 'NATIVE_TEXT' ? 'PDF text' : 'Scanned text'}
                     </span>
                   </button>
                 );
@@ -226,7 +226,7 @@ export function DocumentTextExtractionModal({
                   <>
                     <span>•</span>
                     <span className="text-amber-700 font-mono text-[10px]">
-                      {currentPage.ocr_line_count} OCR lines
+                      {currentPage.ocr_line_count} Recognised text lines
                     </span>
                   </>
                 )}
