@@ -625,7 +625,7 @@ export default function InstitutionOverviewPage() {
                 className="bg-white text-xs border-slate-300 font-mono"
               />
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Evaluated against the regulatory reference date applicable to this filing. The resulting applicability status is shown alongside the requirement.
+                For AY 2026–27, the building-age check uses the 1 July 2026 assessment reference date. A Structural Stability Certificate is applicable after the 30-year anniversary of the Completion Certificate.
               </p>
             </div>
 
