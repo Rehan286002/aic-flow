@@ -3,8 +3,8 @@ import { AppShell } from '@/components/layout/AppShell';
 
 export function RootLayout() {
   return (
-    <DemoRoleProvider>
+    <WorkspaceRoleProvider>
       <AppShell />
-    </DemoRoleProvider>
+    </WorkspaceRoleProvider>
   );
 }
