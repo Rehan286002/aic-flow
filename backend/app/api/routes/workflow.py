@@ -15,6 +15,7 @@ from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_version import DocumentVersion
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
+from app.models.shc_proceeding import SHCProceeding
 from app.models.in_app_notification import InAppNotification
 from app.models.institution import Institution
 from app.models.user import User
@@ -29,6 +30,11 @@ from app.schemas.workflow import (
     EVCVisitReportRequest,
     EVCVisitResponse,
     EVCVisitScheduleRequest,
+    SHCComplianceSubmissionRequest,
+    SHCHearingRecordRequest,
+    SHCHearingScheduleRequest,
+    SHCProceedingResponse,
+    SHCRecommendationRequest,
     ComplianceObligationCreateRequest,
     ComplianceObligationResponse,
     NotificationResponse,
@@ -49,6 +55,10 @@ from app.services.workflow_service import (
     list_case_obligations,
     record_evc_visit_report,
     schedule_evc_visit,
+    record_shc_hearing,
+    record_shc_recommendation,
+    schedule_shc_hearing,
+    submit_shc_compliance_reference,
     transition_case,
     validate_operational_event,
 )
@@ -145,6 +155,7 @@ def get_workflow_case(
     ).order_by(WorkflowEvent.occurred_at.asc())).all())
     obligations = list_case_obligations(db, case.workflow_case_id)
     evc_visit = db.scalar(select(EVCVisit).where(EVCVisit.workflow_case_id == case.workflow_case_id))
+    shc_proceeding = db.scalar(select(SHCProceeding).where(SHCProceeding.workflow_case_id == case.workflow_case_id))
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
@@ -152,6 +163,7 @@ def get_workflow_case(
         events=[WorkflowEventResponse.model_validate(item) for item in events],
         obligations=[ComplianceObligationResponse.model_validate(item) for item in obligations],
         evc_visit=EVCVisitResponse.model_validate(evc_visit) if evc_visit else None,
+        shc_proceeding=SHCProceedingResponse.model_validate(shc_proceeding) if shc_proceeding else None,
     )
 
 
@@ -221,12 +233,11 @@ def transition_workflow_case(
         if evc_visit is None or evc_visit.status != "COMPLETED":
             raise HTTPException(status_code=409, detail="Record the EVC visit report before completing the EVC stage.")
     if payload.to_stage == "AWAITING_AUTHORITY" and case.current_stage == "COMMITTEE_PROCEEDINGS":
-        minutes_event = db.scalar(select(WorkflowEvent).where(
-            WorkflowEvent.workflow_case_id == case.workflow_case_id,
-            WorkflowEvent.event_type == "COMMITTEE_MINUTES_RECORDED",
-        ).limit(1))
-        if minutes_event is None:
-            raise HTTPException(status_code=409, detail="Record the committee minutes before routing the case to the competent authority.")
+        shc_proceeding = db.scalar(select(SHCProceeding).where(
+            SHCProceeding.workflow_case_id == case.workflow_case_id,
+        ))
+        if shc_proceeding is None or shc_proceeding.status != "RECOMMENDATION_RECORDED":
+            raise HTTPException(status_code=409, detail="Record the SHC hearing and recommendation before routing the case to the Executive Committee decision stage.")
     if payload.to_stage == "OBLIGATION_TRACKING" and case.current_stage == "APPROVED_WITH_CONDITIONS":
         first_condition = db.scalar(select(ComplianceObligation).where(
             ComplianceObligation.workflow_case_id == case.workflow_case_id,
@@ -367,6 +378,122 @@ def cancel_scheduled_evc_visit(
     db.commit()
     db.refresh(updated)
     return EVCVisitResponse.model_validate(updated)
+
+
+@router.post("/cases/{workflow_case_id}/shc-proceeding/schedule", response_model=SHCProceedingResponse)
+def schedule_shc_hearing_endpoint(
+    workflow_case_id: uuid.UUID,
+    payload: SHCHearingScheduleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SHCProceedingResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "COMMITTEE_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SHC secretariat may record hearing schedule details.")
+    proceeding = schedule_shc_hearing(
+        db,
+        case,
+        current_user.user_id,
+        hearing_mode=payload.hearing_mode,
+        hearing_scheduled_at=payload.hearing_scheduled_at,
+        hearing_details=payload.hearing_details,
+        notice_reference=payload.notice_reference,
+        official_schedule_reference=payload.official_schedule_reference,
+    )
+    db.commit()
+    db.refresh(proceeding)
+    return SHCProceedingResponse.model_validate(proceeding)
+
+
+@router.post("/shc-proceedings/{shc_proceeding_id}/compliance-submission", response_model=SHCProceedingResponse)
+def submit_shc_compliance_endpoint(
+    shc_proceeding_id: uuid.UUID,
+    payload: SHCComplianceSubmissionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SHCProceedingResponse:
+    proceeding = db.get(SHCProceeding, shc_proceeding_id)
+    if proceeding is None:
+        raise HTTPException(status_code=404, detail="SHC proceeding record not found.")
+    case, application = _get_case(db, proceeding.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "INSTITUTION_USER":
+        raise HTTPException(status_code=403, detail="Only the institution may submit compliance material for its SHC hearing.")
+    updated = submit_shc_compliance_reference(
+        db,
+        case,
+        proceeding,
+        current_user.user_id,
+        submission_reference=payload.submission_reference,
+        note=payload.note,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SHCProceedingResponse.model_validate(updated)
+
+
+@router.post("/shc-proceedings/{shc_proceeding_id}/hearing", response_model=SHCProceedingResponse)
+def record_shc_hearing_endpoint(
+    shc_proceeding_id: uuid.UUID,
+    payload: SHCHearingRecordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SHCProceedingResponse:
+    proceeding = db.get(SHCProceeding, shc_proceeding_id)
+    if proceeding is None:
+        raise HTTPException(status_code=404, detail="SHC proceeding record not found.")
+    case, application = _get_case(db, proceeding.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "COMMITTEE_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SHC secretariat may record the hearing.")
+    updated = record_shc_hearing(
+        db,
+        case,
+        proceeding,
+        current_user.user_id,
+        representative_one_name=payload.representative_one_name,
+        representative_one_designation=payload.representative_one_designation,
+        representative_two_name=payload.representative_two_name,
+        representative_two_designation=payload.representative_two_designation,
+        hearing_summary=payload.hearing_summary,
+        note=payload.note,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SHCProceedingResponse.model_validate(updated)
+
+
+@router.post("/shc-proceedings/{shc_proceeding_id}/recommendation", response_model=SHCProceedingResponse)
+def record_shc_recommendation_endpoint(
+    shc_proceeding_id: uuid.UUID,
+    payload: SHCRecommendationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SHCProceedingResponse:
+    proceeding = db.get(SHCProceeding, shc_proceeding_id)
+    if proceeding is None:
+        raise HTTPException(status_code=404, detail="SHC proceeding record not found.")
+    case, application = _get_case(db, proceeding.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "COMMITTEE_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SHC secretariat may record its recommendation.")
+    updated = record_shc_recommendation(
+        db,
+        case,
+        proceeding,
+        current_user.user_id,
+        recommendation_code=payload.recommendation_code,
+        recommendation_text=payload.recommendation_text,
+        recommendation_reference=payload.recommendation_reference,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SHCProceedingResponse.model_validate(updated)
 
 
 @router.post("/cases/{workflow_case_id}/obligations", response_model=ComplianceObligationResponse, status_code=status.HTTP_201_CREATED)
