@@ -89,7 +89,7 @@ export function formatRoleContextLabel(rc: RoleContext): string {
     case 'EVC_MEMBER':
       return `EVC Assigned Participant${teamSuffix}`;
     case 'COMMITTEE_SECRETARIAT':
-      return `Committee Secretariat${teamSuffix}`;
+      return `Standing Hearing Committee Secretariat${teamSuffix}`;
     case 'BUREAU_SUPERVISOR':
       return `Bureau Supervisor${teamSuffix}`;
     case 'COMPETENT_AUTHORITY':
