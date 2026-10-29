@@ -305,6 +305,13 @@ def transition_case(
     if to_stage == "SUBMITTED":
         case.assigned_role_code = "INTAKE_OFFICER"
     elif to_stage == "INTAKE_REVIEW":
+        # EOA self-disclosure routes continue with intake; scrutiny routes hand off.
+        case.assigned_role_code = (
+            "SCRUTINY_OFFICER"
+            if (case.route_snapshot or {}).get("requires_scrutiny") is True
+            else "INTAKE_OFFICER"
+        )
+    elif to_stage == "SCRUTINY":
         case.assigned_role_code = "SCRUTINY_OFFICER"
     elif to_stage == "EVC_COORDINATION":
         case.assigned_role_code = "EVC_COORDINATOR"
