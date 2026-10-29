@@ -212,12 +212,46 @@ class SHCRecommendationRequest(BaseModel):
     recommendation_reference: str | None = Field(default=None, min_length=2, max_length=180)
 
 
+class ExecutiveCommitteeDecisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    executive_committee_decision_id: uuid.UUID
+    workflow_case_id: uuid.UUID
+    application_id: uuid.UUID
+    outcome_code: str
+    decision_reference: str
+    decision_reasons: str
+    speaking_order_reference: str
+    speaking_order_uploaded_at: datetime
+    appeal_deadline_at: datetime
+    recorded_by: uuid.UUID
+    recorded_at: datetime
+    created_at: datetime
+
+
+class ExecutiveCommitteeDecisionRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    outcome_code: Literal["APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED"]
+    decision_reference: str = Field(min_length=2, max_length=180)
+    decision_reasons: str = Field(min_length=15, max_length=6000)
+    speaking_order_reference: str = Field(min_length=2, max_length=180)
+    speaking_order_uploaded_at: datetime
+
+    @model_validator(mode="after")
+    def validate_speaking_order_timestamp(self):
+        if self.speaking_order_uploaded_at.tzinfo is None or self.speaking_order_uploaded_at.utcoffset() is None:
+            raise ValueError("Speaking Order upload time must include a timezone.")
+        return self
+
+
 class WorkflowCaseDetailResponse(WorkflowCaseListResponse):
     requirements: list[ApplicationRequirementResponse] = Field(default_factory=list)
     events: list[WorkflowEventResponse] = Field(default_factory=list)
     obligations: list[ComplianceObligationResponse] = Field(default_factory=list)
     evc_visit: EVCVisitResponse | None = None
     shc_proceeding: SHCProceedingResponse | None = None
+    executive_committee_decision: ExecutiveCommitteeDecisionResponse | None = None
 
 
 class WorkflowTransitionRequest(BaseModel):
