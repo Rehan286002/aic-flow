@@ -5,7 +5,6 @@ import LoginPage from '@/pages/auth/LoginPage';
 import InstitutionOverviewPage from '@/pages/institution/InstitutionOverviewPage';
 import InstitutionApplicationsPage from '@/pages/institution/InstitutionApplicationsPage';
 import NewApplicationPage from '@/pages/institution/NewApplicationPage';
-import { InstitutionDocumentsPage } from '@/pages/institution/InstitutionDocumentsPage';
 import NotFoundPage from '@/pages/common/NotFoundPage';
 import { IndexRedirect } from '@/components/auth/IndexRedirect';
 import WorkflowHubPage from '@/pages/workflow/WorkflowHubPage';
@@ -39,7 +38,6 @@ export const router = createBrowserRouter([
           { path: 'overview', element: <InstitutionOverviewPage /> },
           { path: 'applications', element: <InstitutionApplicationsPage /> },
           { path: 'applications/new', element: <NewApplicationPage /> },
-          { path: 'documents', element: <InstitutionDocumentsPage /> },
           { path: '*', element: <Navigate to="/workflow" replace /> },
         ],
       },
