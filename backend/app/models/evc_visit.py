@@ -34,6 +34,10 @@ class EVCVisit(Base):
             name="chk_evc_visits_scheduled_details",
         ),
         CheckConstraint(
+            "report_outcome IS NULL OR report_outcome IN ('NO_DEFICIENCY_RECORDED', 'DEFICIENCIES_OBSERVED', 'FOLLOW_UP_REQUIRED', 'INCONCLUSIVE')",
+            name="chk_evc_visits_report_outcome",
+        ),
+        CheckConstraint(
             "status <> 'COMPLETED' OR (report_reference IS NOT NULL AND report_summary IS NOT NULL AND report_outcome IS NOT NULL AND report_recorded_at IS NOT NULL AND report_recorded_by IS NOT NULL)",
             name="chk_evc_visits_completed_report",
         ),
