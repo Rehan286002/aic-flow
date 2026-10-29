@@ -21,6 +21,7 @@ from app.models.application_revision import ApplicationRevision
 from app.models.enums import RevisionStatus
 from app.models.enums import ApplicationStatus
 from app.models.compliance_obligation import ComplianceObligation
+from app.models.evc_visit import EVCVisit
 from app.models.in_app_notification import InAppNotification
 from app.models.institution_membership import InstitutionMembership
 from app.models.review_team_member import ReviewTeamMember
@@ -82,16 +83,12 @@ TRANSITION_ROLES: dict[tuple[str, str], set[str]] = {
 }
 
 EVENT_ROLE_ALLOWLIST: dict[str, set[str]] = {
-    "EVC_VISIT_SCHEDULED": {"EVC_COORDINATOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"},
-    "EVC_REPORT_RECORDED": {"EVC_COORDINATOR", "EVC_MEMBER"},
     "COMMITTEE_CONVENED": {"COMMITTEE_SECRETARIAT"},
     "COMMITTEE_MINUTES_RECORDED": {"COMMITTEE_SECRETARIAT"},
     "OFFICER_NOTE": {"INTAKE_OFFICER", "SCRUTINY_OFFICER", "REGIONAL_OFFICER", "BUREAU_SUPERVISOR", "AUDITOR", "LEAD_AUDITOR"},
 }
 
 EVENT_STAGE_ALLOWLIST: dict[str, set[str]] = {
-    "EVC_VISIT_SCHEDULED": {"EVC_COORDINATION"},
-    "EVC_REPORT_RECORDED": {"EVC_SCHEDULED"},
     "COMMITTEE_CONVENED": {"COMMITTEE_PROCEEDINGS"},
     "COMMITTEE_MINUTES_RECORDED": {"COMMITTEE_PROCEEDINGS"},
 }
@@ -111,6 +108,168 @@ def validate_operational_event(case: WorkflowCase, event_type: str) -> None:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Committee proceedings are not configured as applicable for this application's route.",
             )
+
+
+def validate_evc_schedule_stage(case: WorkflowCase, existing_visit: EVCVisit | None = None) -> None:
+    """Validate that the case route and current stage permit EVC scheduling or rescheduling."""
+    if (case.route_snapshot or {}).get("requires_evc") is not True:
+        raise HTTPException(status_code=409, detail="The approved application route does not require an EVC visit.")
+    if case.current_stage not in {"EVC_COORDINATION", "EVC_SCHEDULED"}:
+        raise HTTPException(status_code=409, detail="EVC scheduling is available only during EVC coordination or a scheduled visit.")
+    if existing_visit is not None and existing_visit.status == "COMPLETED":
+        raise HTTPException(status_code=409, detail="A completed EVC visit cannot be rescheduled.")
+
+
+def validate_evc_report_stage(case: WorkflowCase, visit: EVCVisit | None) -> None:
+    """Require a scheduled visit before its report may be recorded."""
+    if case.current_stage != "EVC_SCHEDULED":
+        raise HTTPException(status_code=409, detail="An EVC report can be recorded only while the case is at the scheduled EVC stage.")
+    if visit is None or visit.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="A current scheduled EVC visit is required before recording its report.")
+
+
+def schedule_evc_visit(
+    db: Session,
+    case: WorkflowCase,
+    actor_user_id: uuid.UUID,
+    *,
+    visit_mode: str,
+    scheduled_start_at: datetime,
+    scheduled_end_at: datetime | None,
+    venue_or_meeting_details: str,
+    official_schedule_reference: str | None,
+    institution_contact_name: str | None,
+    institution_contact_email: str | None,
+    coordination_note: str,
+) -> EVCVisit:
+    visit = db.scalar(
+        select(EVCVisit)
+        .where(EVCVisit.workflow_case_id == case.workflow_case_id)
+        .with_for_update()
+    )
+    validate_evc_schedule_stage(case, visit)
+    if scheduled_start_at <= datetime.now(UTC):
+        raise HTTPException(status_code=422, detail="The EVC visit start must be in the future.")
+    if scheduled_end_at is not None and scheduled_end_at <= scheduled_start_at:
+        raise HTTPException(status_code=422, detail="The EVC visit end must be later than its start.")
+
+    previous_status = visit.status if visit is not None else None
+    previous_start = visit.scheduled_start_at.isoformat() if visit and visit.scheduled_start_at else None
+    previous_end = visit.scheduled_end_at.isoformat() if visit and visit.scheduled_end_at else None
+    if visit is None:
+        visit = EVCVisit(
+            workflow_case_id=case.workflow_case_id,
+            application_id=case.application_id,
+            created_by=actor_user_id,
+            schedule_revision=0,
+        )
+        db.add(visit)
+        db.flush()
+
+    event_type = "EVC_VISIT_RESCHEDULED" if previous_status == "SCHEDULED" else "EVC_VISIT_SCHEDULED"
+    visit.status = "SCHEDULED"
+    visit.visit_mode = visit_mode
+    visit.scheduled_start_at = scheduled_start_at
+    visit.scheduled_end_at = scheduled_end_at
+    visit.venue_or_meeting_details = venue_or_meeting_details.strip()
+    visit.official_schedule_reference = official_schedule_reference.strip() if official_schedule_reference else None
+    visit.institution_contact_name = institution_contact_name.strip() if institution_contact_name else None
+    visit.institution_contact_email = institution_contact_email.strip().lower() if institution_contact_email else None
+    visit.coordination_note = coordination_note.strip()
+    visit.schedule_revision = (visit.schedule_revision or 0) + 1
+    visit.cancellation_reason = None
+    visit.updated_by = actor_user_id
+    visit.updated_at = datetime.now(UTC)
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type=event_type,
+        summary=f"{'EVC visit rescheduled' if event_type == 'EVC_VISIT_RESCHEDULED' else 'EVC visit scheduled'} for {scheduled_start_at.isoformat()}. {coordination_note.strip()}",
+        event_payload={
+            "evc_visit_id": str(visit.evc_visit_id),
+            "schedule_revision": visit.schedule_revision,
+            "previous_status": previous_status,
+            "previous_start_at": previous_start,
+            "previous_end_at": previous_end,
+            "scheduled_start_at": scheduled_start_at.isoformat(),
+            "scheduled_end_at": scheduled_end_at.isoformat() if scheduled_end_at else None,
+            "visit_mode": visit_mode,
+            "venue_or_meeting_details": venue_or_meeting_details.strip(),
+            "official_schedule_reference": visit.official_schedule_reference,
+        },
+    )
+    return visit
+
+
+def record_evc_visit_report(
+    db: Session,
+    case: WorkflowCase,
+    visit: EVCVisit | None,
+    actor_user_id: uuid.UUID,
+    *,
+    report_reference: str,
+    report_summary: str,
+    report_outcome: str,
+    note: str,
+) -> EVCVisit:
+    validate_evc_report_stage(case, visit)
+    assert visit is not None
+    now = datetime.now(UTC)
+    visit.status = "COMPLETED"
+    visit.report_reference = report_reference.strip()
+    visit.report_summary = report_summary.strip()
+    visit.report_outcome = report_outcome
+    visit.report_recorded_by = actor_user_id
+    visit.report_recorded_at = now
+    visit.updated_by = actor_user_id
+    visit.updated_at = now
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="EVC_REPORT_RECORDED",
+        summary=f"EVC report {report_reference.strip()} recorded. {note.strip()}",
+        event_payload={
+            "evc_visit_id": str(visit.evc_visit_id),
+            "report_reference": visit.report_reference,
+            "report_outcome": report_outcome,
+            "report_summary": visit.report_summary,
+        },
+    )
+    return visit
+
+
+def cancel_evc_visit(
+    db: Session,
+    case: WorkflowCase,
+    visit: EVCVisit | None,
+    actor_user_id: uuid.UUID,
+    reason: str,
+) -> EVCVisit:
+    if case.current_stage not in {"EVC_COORDINATION", "EVC_SCHEDULED"}:
+        raise HTTPException(status_code=409, detail="An EVC visit can be cancelled only during coordination or before its report is recorded.")
+    if visit is None or visit.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="There is no active scheduled EVC visit to cancel.")
+    now = datetime.now(UTC)
+    visit.status = "CANCELLED"
+    visit.cancellation_reason = reason.strip()
+    visit.updated_by = actor_user_id
+    visit.updated_at = now
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="EVC_VISIT_CANCELLED",
+        summary=f"EVC visit cancelled. {reason.strip()}",
+        event_payload={
+            "evc_visit_id": str(visit.evc_visit_id),
+            "schedule_revision": visit.schedule_revision,
+            "previous_start_at": visit.scheduled_start_at.isoformat() if visit.scheduled_start_at else None,
+            "reason": reason.strip(),
+        },
+    )
+    return visit
 
 
 def route_profile_for(process_type: str) -> tuple[str, str, dict[str, Any]]:
