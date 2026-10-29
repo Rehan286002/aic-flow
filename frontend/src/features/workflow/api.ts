@@ -99,12 +99,28 @@ export interface SHCProceeding {
   updated_at: string;
 }
 
+export interface ExecutiveCommitteeDecision {
+  executive_committee_decision_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  outcome_code: 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'REJECTED';
+  decision_reference: string;
+  decision_reasons: string;
+  speaking_order_reference: string;
+  speaking_order_uploaded_at: string;
+  appeal_deadline_at: string;
+  recorded_by: string;
+  recorded_at: string;
+  created_at: string;
+}
+
 export interface WorkflowDetail extends WorkflowCase {
   requirements: ApplicationRequirementItem[];
   events: WorkflowEvent[];
   obligations: ComplianceObligation[];
   evc_visit: EVCVisit | null;
   shc_proceeding: SHCProceeding | null;
+  executive_committee_decision: ExecutiveCommitteeDecision | null;
 }
 
 export interface WorkflowNotification {
@@ -129,6 +145,15 @@ export const workflowApi = {
     request<WorkflowDetail>(`/api/v1/workflow/cases/${id}/assign`, {
       method: 'POST', body: JSON.stringify({ review_team_id, assigned_role_code: 'INTAKE_OFFICER', note }),
     }, true),
+  recordExecutiveCommitteeDecision: (caseId: string, payload: {
+    outcome_code: 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'REJECTED';
+    decision_reference: string;
+    decision_reasons: string;
+    speaking_order_reference: string;
+    speaking_order_uploaded_at: string;
+  }) => request<WorkflowDetail>(`/api/v1/workflow/cases/${caseId}/executive-committee-decision`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
   scheduleShcHearing: (caseId: string, payload: {
     hearing_mode: 'ONLINE' | 'IN_PERSON';
     hearing_scheduled_at: string;
