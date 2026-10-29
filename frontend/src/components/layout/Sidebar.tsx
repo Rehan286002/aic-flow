@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { ROLE_NAVIGATION } from '@/config/navigation';
 import {
   Tooltip,
