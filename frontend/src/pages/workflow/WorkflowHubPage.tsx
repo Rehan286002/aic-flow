@@ -26,7 +26,7 @@ const ROLE_GUIDANCE: Record<string, { title: string; description: string }> = {
   REGIONAL_OFFICER: { title: 'Regional coordination', description: 'Coordinate regional processing, monitor ageing and workload, and supervise assigned case hand-offs.' },
   EVC_COORDINATOR: { title: 'EVC coordination', description: 'Coordinate visit logistics, record the schedule and ensure the visit report is recorded against the case.' },
   EVC_MEMBER: { title: 'EVC assigned participant', description: 'Record the visit outcome and supporting report for the assigned case.' },
-  COMMITTEE_SECRETARIAT: { title: 'Standing Hearing Committee secretariat', description: 'Maintain the hearing proceeding record and record the convening and minutes before the next hand-off.' },
+  COMMITTEE_SECRETARIAT: { title: 'Standing Hearing Committee secretariat', description: 'Maintain the SHC hearing schedule, institution appearance record and recommendation for Executive Committee consideration.' },
   BUREAU_SUPERVISOR: { title: 'Bureau supervision', description: 'Oversee case pendency, review escalations and verify closure of post-decision obligations.' },
   LEAD_AUDITOR: { title: 'Senior regulatory oversight', description: 'Review escalated cases, supervise processing and monitor compliance resolution.' },
   COMPETENT_AUTHORITY: { title: 'Competent authority', description: 'Review the completed case record and record the authorised statutory outcome and any binding conditions.' },
@@ -714,7 +714,6 @@ export default function WorkflowHubPage() {
               {role === 'INTAKE_OFFICER' && selected.current_stage === 'SUBMITTED' && selected.assigned_role_code === 'INTAKE_OFFICER' && !selected.assigned_user_id && teamId && <button onClick={() => void assignCase()} disabled={busy} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Assign to my review team</button>}
               <div className="mt-4 space-y-2"><label className="text-xs font-semibold text-slate-700">Action reason / case note</label><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Record the reason, instruction or review note..." className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"/>
                 <div className="flex flex-wrap gap-2">{nextStages.map((stage) => <button key={stage} onClick={() => void transition(stage)} disabled={busy} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{stageLabel(stage)}</button>)}</div>
-                {role === 'COMMITTEE_SECRETARIAT' && selected.current_stage === 'COMMITTEE_PROCEEDINGS' && <div className="flex gap-2"><button onClick={() => void recordEvent('COMMITTEE_CONVENED', 'Enter the SHC convening note first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Record SHC convening</button><button onClick={() => void recordEvent('COMMITTEE_MINUTES_RECORDED', 'Enter the SHC minutes reference first.')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Record SHC minutes</button></div>}
               </div>
             </div>
 
