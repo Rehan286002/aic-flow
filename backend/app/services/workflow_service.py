@@ -22,6 +22,7 @@ from app.models.enums import RevisionStatus
 from app.models.enums import ApplicationStatus
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
+from app.models.shc_proceeding import SHCProceeding
 from app.models.in_app_notification import InAppNotification
 from app.models.institution_membership import InstitutionMembership
 from app.models.review_team_member import ReviewTeamMember
@@ -272,6 +273,194 @@ def cancel_evc_visit(
         },
     )
     return visit
+
+
+def validate_shc_stage(case: WorkflowCase) -> None:
+    """SHC proceedings are available only on a route-confirmed SHC stage."""
+    if (case.route_snapshot or {}).get("requires_committee") is not True:
+        raise HTTPException(status_code=409, detail="The approved application route does not include an SHC proceeding.")
+    if case.current_stage != "COMMITTEE_PROCEEDINGS":
+        raise HTTPException(status_code=409, detail="SHC actions are available only during the SHC proceeding stage.")
+
+
+def schedule_shc_hearing(
+    db: Session,
+    case: WorkflowCase,
+    actor_user_id: uuid.UUID,
+    *,
+    hearing_mode: str,
+    hearing_scheduled_at: datetime,
+    hearing_details: str,
+    notice_reference: str | None,
+    official_schedule_reference: str | None,
+) -> SHCProceeding:
+    validate_shc_stage(case)
+    proceeding = db.scalar(
+        select(SHCProceeding)
+        .where(SHCProceeding.workflow_case_id == case.workflow_case_id)
+        .with_for_update()
+    )
+    if proceeding is not None and proceeding.status in {"HEARING_RECORDED", "RECOMMENDATION_RECORDED"}:
+        raise HTTPException(status_code=409, detail="The SHC hearing has already been recorded and cannot be rescheduled.")
+    if hearing_scheduled_at <= datetime.now(UTC):
+        raise HTTPException(status_code=422, detail="The SHC hearing must be scheduled for a future date and time.")
+
+    if proceeding is None:
+        proceeding = SHCProceeding(
+            workflow_case_id=case.workflow_case_id,
+            application_id=case.application_id,
+            created_by=actor_user_id,
+            schedule_revision=0,
+        )
+        db.add(proceeding)
+        db.flush()
+
+    previous_at = proceeding.hearing_scheduled_at.isoformat() if proceeding.hearing_scheduled_at else None
+    event_type = "SHC_HEARING_RESCHEDULED" if proceeding.status == "SCHEDULED" else "SHC_HEARING_SCHEDULED"
+    proceeding.status = "SCHEDULED"
+    proceeding.hearing_mode = hearing_mode
+    proceeding.hearing_scheduled_at = hearing_scheduled_at
+    proceeding.hearing_details = hearing_details.strip()
+    proceeding.notice_reference = notice_reference.strip() if notice_reference else None
+    proceeding.official_schedule_reference = official_schedule_reference.strip() if official_schedule_reference else None
+    proceeding.schedule_revision = (proceeding.schedule_revision or 0) + 1
+    proceeding.updated_by = actor_user_id
+    proceeding.updated_at = datetime.now(UTC)
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type=event_type,
+        summary=f"SHC hearing {'rescheduled' if event_type == 'SHC_HEARING_RESCHEDULED' else 'scheduled'} for {hearing_scheduled_at.isoformat()}.",
+        event_payload={
+            "shc_proceeding_id": str(proceeding.shc_proceeding_id),
+            "schedule_revision": proceeding.schedule_revision,
+            "previous_hearing_at": previous_at,
+            "hearing_scheduled_at": hearing_scheduled_at.isoformat(),
+            "hearing_mode": hearing_mode,
+            "notice_reference": proceeding.notice_reference,
+            "official_schedule_reference": proceeding.official_schedule_reference,
+        },
+    )
+    return proceeding
+
+
+def submit_shc_compliance_reference(
+    db: Session,
+    case: WorkflowCase,
+    proceeding: SHCProceeding | None,
+    actor_user_id: uuid.UUID,
+    *,
+    submission_reference: str,
+    note: str,
+) -> SHCProceeding:
+    validate_shc_stage(case)
+    if proceeding is None or proceeding.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="An SHC hearing must be scheduled before compliance material can be submitted.")
+    if proceeding.hearing_scheduled_at is not None and proceeding.hearing_scheduled_at <= datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="The scheduled hearing time has passed; the compliance submission window for this hearing is closed.")
+    proceeding.institution_submission_reference = submission_reference.strip()
+    proceeding.updated_by = actor_user_id
+    proceeding.updated_at = datetime.now(UTC)
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="SHC_COMPLIANCE_SUBMISSION_RECORDED",
+        summary=f"Institution compliance submission recorded. {note.strip()}",
+        event_payload={
+            "shc_proceeding_id": str(proceeding.shc_proceeding_id),
+            "submission_reference": proceeding.institution_submission_reference,
+        },
+    )
+    return proceeding
+
+
+def record_shc_hearing(
+    db: Session,
+    case: WorkflowCase,
+    proceeding: SHCProceeding | None,
+    actor_user_id: uuid.UUID,
+    *,
+    representative_one_name: str,
+    representative_one_designation: str,
+    representative_two_name: str,
+    representative_two_designation: str,
+    hearing_summary: str,
+    note: str,
+) -> SHCProceeding:
+    validate_shc_stage(case)
+    if proceeding is None or proceeding.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="A scheduled SHC hearing is required before recording the hearing.")
+    if proceeding.hearing_scheduled_at is not None and proceeding.hearing_scheduled_at > datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="The SHC hearing cannot be recorded before its scheduled date and time.")
+    if representative_one_name.strip().casefold() == representative_two_name.strip().casefold():
+        raise HTTPException(status_code=422, detail="Record the two institution representatives separately.")
+    now = datetime.now(UTC)
+    proceeding.status = "HEARING_RECORDED"
+    proceeding.representative_one_name = representative_one_name.strip()
+    proceeding.representative_one_designation = representative_one_designation.strip()
+    proceeding.representative_two_name = representative_two_name.strip()
+    proceeding.representative_two_designation = representative_two_designation.strip()
+    proceeding.hearing_summary = hearing_summary.strip()
+    proceeding.hearing_recorded_by = actor_user_id
+    proceeding.hearing_recorded_at = now
+    proceeding.updated_by = actor_user_id
+    proceeding.updated_at = now
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="SHC_HEARING_RECORDED",
+        summary=f"SHC hearing record entered. {note.strip()}",
+        event_payload={
+            "shc_proceeding_id": str(proceeding.shc_proceeding_id),
+            "representatives": [
+                {"name": proceeding.representative_one_name, "designation": proceeding.representative_one_designation},
+                {"name": proceeding.representative_two_name, "designation": proceeding.representative_two_designation},
+            ],
+            "institution_submission_reference": proceeding.institution_submission_reference,
+        },
+    )
+    return proceeding
+
+
+def record_shc_recommendation(
+    db: Session,
+    case: WorkflowCase,
+    proceeding: SHCProceeding | None,
+    actor_user_id: uuid.UUID,
+    *,
+    recommendation_code: str,
+    recommendation_text: str,
+    recommendation_reference: str | None,
+) -> SHCProceeding:
+    validate_shc_stage(case)
+    if proceeding is None or proceeding.status != "HEARING_RECORDED":
+        raise HTTPException(status_code=409, detail="Record the SHC hearing before recording its recommendation.")
+    now = datetime.now(UTC)
+    proceeding.status = "RECOMMENDATION_RECORDED"
+    proceeding.recommendation_code = recommendation_code
+    proceeding.recommendation_text = recommendation_text.strip()
+    proceeding.recommendation_reference = recommendation_reference.strip() if recommendation_reference else None
+    proceeding.recommendation_recorded_by = actor_user_id
+    proceeding.recommendation_recorded_at = now
+    proceeding.updated_by = actor_user_id
+    proceeding.updated_at = now
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="SHC_RECOMMENDATION_RECORDED",
+        summary="SHC recommendation recorded for Executive Committee consideration.",
+        event_payload={
+            "shc_proceeding_id": str(proceeding.shc_proceeding_id),
+            "recommendation_code": recommendation_code,
+            "recommendation_reference": proceeding.recommendation_reference,
+            "recommendation_text": proceeding.recommendation_text,
+        },
+    )
+    return proceeding
 
 
 def route_profile_for(process_type: str) -> tuple[str, str, dict[str, Any]]:
