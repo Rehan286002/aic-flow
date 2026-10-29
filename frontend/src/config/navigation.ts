@@ -1,4 +1,4 @@
-import { FilePlus, Workflow } from 'lucide-react';
+import { FilePlus, FileText, FolderOpen, Workflow } from 'lucide-react';
 import type { Role } from '../types/roles';
 import type { NavItem } from '../types/navigation';
 
@@ -12,6 +12,18 @@ const workflowItem: NavItem = {
 export const ROLE_NAVIGATION: Record<Role, NavItem[]> = {
   institution: [
     workflowItem,
+    {
+      title: 'My Applications',
+      path: '/institution/applications',
+      icon: FolderOpen,
+      description: 'View applications and their current processing status',
+    },
+    {
+      title: 'Document Library',
+      path: '/institution/documents',
+      icon: FileText,
+      description: 'Review uploaded application documents and their versions',
+    },
     {
       title: 'New Application',
       path: '/institution/applications/new',
