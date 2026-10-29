@@ -29,8 +29,8 @@ const ROLE_GUIDANCE: Record<string, { title: string; description: string }> = {
   BUREAU_SUPERVISOR: { title: 'Bureau supervision', description: 'Oversee case pendency, review escalations and verify closure of post-decision obligations.' },
   LEAD_AUDITOR: { title: 'Senior regulatory oversight', description: 'Review escalated cases, supervise processing and monitor compliance resolution.' },
   COMPETENT_AUTHORITY: { title: 'Competent authority', description: 'Review the completed case record and record the authorised statutory outcome and any binding conditions.' },
-  REGULATORY_POLICY_PUBLISHER: { title: 'Regulatory policy administration', description: 'Maintain approved category routes and their effective regulatory versions.' },
-  ADMIN: { title: 'Platform administration', description: 'Manage platform access and operational configuration within the assigned administration scope.' },
+  REGULATORY_POLICY_PUBLISHER: { title: 'Regulatory policy administration', description: 'Review the category-specific route and regulatory-version baseline assigned to your policy-governance account.' },
+  ADMIN: { title: 'Platform administration', description: 'View your platform-administration role and the access scope assigned to your account.' },
 };
 
 export default function WorkflowHubPage() {
