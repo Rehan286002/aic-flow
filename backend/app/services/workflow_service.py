@@ -277,7 +277,10 @@ def cancel_evc_visit(
 
 
 def validate_ec_decision_stage(case: WorkflowCase, role_code: str) -> None:
-    validate_ec_decision_stage(case, role_code)
+    if role_code != "COMPETENT_AUTHORITY":
+        raise HTTPException(status_code=403, detail="Only the authorised Competent Authority may record the Executive Committee decision.")
+    if case.current_stage != "AWAITING_AUTHORITY":
+        raise HTTPException(status_code=409, detail="The case must be at Executive Committee decision before recording the outcome.")
 
 
 def calculate_appeal_deadline(speaking_order_uploaded_at: datetime) -> datetime:
