@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import {
   Compass,
   ArrowLeft,
