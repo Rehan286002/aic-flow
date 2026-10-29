@@ -112,17 +112,17 @@ export function DocumentUploadModal({
       setScanResult(res);
 
       if (res.document_version.is_clean) {
-        toast.success('Document uploaded and verified clean', {
-          description: `Version ${res.document_version.version_number} recorded with SHA-256 integrity.`,
+        toast.success('Document uploaded successfully', {
+          description: `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
         });
         onUploadSuccess(res);
       } else if (res.document_version.security_scan?.scan_status === 'DETECTED') {
-        toast.error('Malware Detected', {
-          description: `File flagged as ${res.document_version.security_scan.threat_name}. Version rejected.`,
+        toast.error('File could not be accepted', {
+          description: `The file did not pass the security check and was not added to the application.`,
         });
         onUploadSuccess(res);
       } else {
-        toast.warning('Antivirus scan error', {
+        toast.warning('File safety check needs attention', {
           description: 'Document placed in quarantine pending scan retry.',
         });
         onUploadSuccess(res);
@@ -160,12 +160,10 @@ export function DocumentUploadModal({
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
             <div className="font-medium text-slate-800 flex items-center gap-1.5">
               <ShieldCheck className="size-4 text-indigo-600" />
-              <span>Evidence Ingestion & Security Validation Pipeline</span>
+              <span>File Safety Check</span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Files are streamed directly to private quarantine storage, scanned by ClamAV for
-              viruses/malware, verified for authentic file headers, and stamped with an immutable
-              SHA-256 fingerprint. Accepted formats: PDF, JPEG, PNG (max 20 MB).
+              Your document is checked for file safety and integrity before it is added to the application. Accepted formats: PDF, JPEG, PNG (max 20 MB).
             </p>
           </div>
 
@@ -251,29 +249,23 @@ export function DocumentUploadModal({
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-emerald-900">
                     <ShieldCheck className="size-5 text-emerald-600" />
-                    <span>Antivirus Verification: CLEAN (Passed)</span>
+                    <span>File safety check passed</span>
                   </div>
                   <p className="text-emerald-800 text-[11px]">
-                    Document was scanned by ClamAV daemon and verified free of known threats.
-                    Assigned Version {scanResult.document_version.version_number} as active evidence.
+                    The document passed the required safety and integrity checks. Version {scanResult.document_version.version_number} is now active evidence.
                   </p>
-                  <div className="pt-1 text-[11px] font-mono text-emerald-950 bg-emerald-100/60 p-2 rounded border border-emerald-200 truncate">
-                    SHA-256: {scanResult.document_version.sha256_hex}
+                  <div className="pt-1 text-[11px] font-medium text-emerald-800">
+                    File integrity: Verified
                   </div>
                 </div>
               ) : scanResult.document_version.security_scan?.scan_status === 'DETECTED' ? (
                 <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-rose-900">
                     <ShieldAlert className="size-5 text-rose-600" />
-                    <span>SECURITY ALERT: Malware Signature Detected</span>
+                    <span>File safety check not passed</span>
                   </div>
                   <p className="text-rose-800 text-[11px]">
-                    ClamAV detected infected signature: {' '}
-                    <strong className="font-mono text-rose-950">
-                      {scanResult.document_version.security_scan.threat_name}
-                    </strong>
-                    . This version was rejected and placed in isolated rejected storage.
-                    Downloads are prohibited.
+                    The file did not pass the security check and has not been added to the application. Please choose a different file.
                   </p>
                 </div>
               ) : (
@@ -315,12 +307,12 @@ export function DocumentUploadModal({
               {uploading ? (
                 <>
                   <Loader2 className="size-3.5 animate-spin" />
-                  <span>Scanning with ClamAV...</span>
+                  <span>Checking file safety…</span>
                 </>
               ) : (
                 <>
                   <FileCheck2 className="size-3.5" />
-                  <span>Upload & Scan Evidence</span>
+                  <span>Upload Document</span>
                 </>
               )}
             </Button>
