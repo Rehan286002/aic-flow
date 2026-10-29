@@ -44,6 +44,7 @@ from app.models.digital_signature_check import DigitalSignatureCheck
 
 # Approval workflow, committee proceedings, EVC coordination, post-decision obligations and alerts
 from app.models.evc_visit import EVCVisit
+from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
@@ -101,6 +102,7 @@ __all__ = [
     "DigitalSignatureCheck",
     # Approval workflow, post-decision obligations and alerts
     "EVCVisit",
+    "ExecutiveCommitteeDecision",
     "SHCProceeding",
     "WorkflowCase",
     "WorkflowEvent",
