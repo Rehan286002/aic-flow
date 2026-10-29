@@ -14,6 +14,7 @@ from app.models.document import Document
 from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_version import DocumentVersion
 from app.models.compliance_obligation import ComplianceObligation
+from app.models.evc_visit import EVCVisit
 from app.models.in_app_notification import InAppNotification
 from app.models.institution import Institution
 from app.models.user import User
@@ -24,6 +25,10 @@ from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.schemas.workflow import (
     ComplianceObligationActionRequest,
+    EVCVisitCancelRequest,
+    EVCVisitReportRequest,
+    EVCVisitResponse,
+    EVCVisitScheduleRequest,
     ComplianceObligationCreateRequest,
     ComplianceObligationResponse,
     NotificationResponse,
@@ -39,8 +44,11 @@ from app.services.workflow_service import (
     EVENT_ROLE_ALLOWLIST,
     add_workflow_event,
     case_access_context,
+    cancel_evc_visit,
     create_obligation,
     list_case_obligations,
+    record_evc_visit_report,
+    schedule_evc_visit,
     transition_case,
     validate_operational_event,
 )
@@ -136,12 +144,14 @@ def get_workflow_case(
         WorkflowEvent.workflow_case_id == case.workflow_case_id
     ).order_by(WorkflowEvent.occurred_at.asc())).all())
     obligations = list_case_obligations(db, case.workflow_case_id)
+    evc_visit = db.scalar(select(EVCVisit).where(EVCVisit.workflow_case_id == case.workflow_case_id))
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
         requirements=application_detail.requirements,
         events=[WorkflowEventResponse.model_validate(item) for item in events],
         obligations=[ComplianceObligationResponse.model_validate(item) for item in obligations],
+        evc_visit=EVCVisitResponse.model_validate(evc_visit) if evc_visit else None,
     )
 
 
@@ -199,18 +209,16 @@ def transition_workflow_case(
     case, application = _get_case(db, workflow_case_id)
     context = _require_case_access(db, application, current_user)
     if payload.to_stage == "EVC_SCHEDULED":
-        schedule_event = db.scalar(select(WorkflowEvent).where(
-            WorkflowEvent.workflow_case_id == case.workflow_case_id,
-            WorkflowEvent.event_type == "EVC_VISIT_SCHEDULED",
-        ).limit(1))
-        if schedule_event is None:
-            raise HTTPException(status_code=409, detail="Record the EVC visit schedule before moving the case to the scheduled stage.")
+        evc_visit = db.scalar(select(EVCVisit).where(
+            EVCVisit.workflow_case_id == case.workflow_case_id,
+        ))
+        if evc_visit is None or evc_visit.status != "SCHEDULED":
+            raise HTTPException(status_code=409, detail="Enter the structured EVC visit schedule before moving the case to the scheduled stage.")
     if payload.to_stage == "EVC_COMPLETED":
-        report_event = db.scalar(select(WorkflowEvent).where(
-            WorkflowEvent.workflow_case_id == case.workflow_case_id,
-            WorkflowEvent.event_type == "EVC_REPORT_RECORDED",
-        ).limit(1))
-        if report_event is None:
+        evc_visit = db.scalar(select(EVCVisit).where(
+            EVCVisit.workflow_case_id == case.workflow_case_id,
+        ))
+        if evc_visit is None or evc_visit.status != "COMPLETED":
             raise HTTPException(status_code=409, detail="Record the EVC visit report before completing the EVC stage.")
     if payload.to_stage == "AWAITING_AUTHORITY" and case.current_stage == "COMMITTEE_PROCEEDINGS":
         minutes_event = db.scalar(select(WorkflowEvent).where(
@@ -278,6 +286,87 @@ def create_case_event(
     db.commit()
     db.refresh(event)
     return WorkflowEventResponse.model_validate(event)
+
+
+@router.post("/cases/{workflow_case_id}/evc-visit", response_model=EVCVisitResponse)
+def schedule_or_reschedule_evc_visit(
+    workflow_case_id: uuid.UUID,
+    payload: EVCVisitScheduleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EVCVisitResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code not in {"EVC_COORDINATOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}:
+        raise HTTPException(status_code=403, detail="Only authorised EVC coordination or supervisory roles may schedule this visit.")
+    visit = schedule_evc_visit(
+        db,
+        case,
+        current_user.user_id,
+        visit_mode=payload.visit_mode,
+        scheduled_start_at=payload.scheduled_start_at,
+        scheduled_end_at=payload.scheduled_end_at,
+        venue_or_meeting_details=payload.venue_or_meeting_details,
+        official_schedule_reference=payload.official_schedule_reference,
+        institution_contact_name=payload.institution_contact_name,
+        institution_contact_email=payload.institution_contact_email,
+        coordination_note=payload.coordination_note,
+    )
+    db.commit()
+    db.refresh(visit)
+    return EVCVisitResponse.model_validate(visit)
+
+
+@router.post("/evc-visits/{evc_visit_id}/report", response_model=EVCVisitResponse)
+def submit_evc_visit_report(
+    evc_visit_id: uuid.UUID,
+    payload: EVCVisitReportRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EVCVisitResponse:
+    visit = db.get(EVCVisit, evc_visit_id)
+    if visit is None:
+        raise HTTPException(status_code=404, detail="EVC visit record not found.")
+    case, application = _get_case(db, visit.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code not in {"EVC_COORDINATOR", "EVC_MEMBER"}:
+        raise HTTPException(status_code=403, detail="Only an authorised EVC participant may record the visit report.")
+    updated = record_evc_visit_report(
+        db,
+        case,
+        visit,
+        current_user.user_id,
+        report_reference=payload.report_reference,
+        report_summary=payload.report_summary,
+        report_outcome=payload.report_outcome,
+        note=payload.note,
+    )
+    db.commit()
+    db.refresh(updated)
+    return EVCVisitResponse.model_validate(updated)
+
+
+@router.post("/evc-visits/{evc_visit_id}/cancel", response_model=EVCVisitResponse)
+def cancel_scheduled_evc_visit(
+    evc_visit_id: uuid.UUID,
+    payload: EVCVisitCancelRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EVCVisitResponse:
+    visit = db.get(EVCVisit, evc_visit_id)
+    if visit is None:
+        raise HTTPException(status_code=404, detail="EVC visit record not found.")
+    case, application = _get_case(db, visit.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code not in {"EVC_COORDINATOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}:
+        raise HTTPException(status_code=403, detail="Only authorised EVC coordination or supervisory roles may cancel this visit.")
+    updated = cancel_evc_visit(db, case, visit, current_user.user_id, payload.reason)
+    db.commit()
+    db.refresh(updated)
+    return EVCVisitResponse.model_validate(updated)
 
 
 @router.post("/cases/{workflow_case_id}/obligations", response_model=ComplianceObligationResponse, status_code=status.HTTP_201_CREATED)
