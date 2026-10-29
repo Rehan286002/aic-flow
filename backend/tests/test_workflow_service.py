@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.services.workflow_service import (
     case_access_context,
+    evc_completion_assignee,
     intake_review_assignee,
     route_profile_for,
     validate_evc_report_stage,
@@ -31,6 +32,12 @@ def test_intake_review_assignment_hands_increase_intake_to_scrutiny():
 def test_unknown_route_does_not_auto_assign_scrutiny():
     _code, _version, snapshot = route_profile_for("UNCONFIGURED_CATEGORY")
     assert intake_review_assignee(snapshot) == "INTAKE_OFFICER"
+
+
+def test_evc_completion_routes_to_shc_only_when_applicability_is_confirmed():
+    assert evc_completion_assignee({"requires_committee": True}) == "COMMITTEE_SECRETARIAT"
+    assert evc_completion_assignee({"requires_committee": False}) == "REGIONAL_OFFICER"
+    assert evc_completion_assignee({"requires_committee": None}) == "REGIONAL_OFFICER"
 
 
 def test_eoa_self_disclosure_has_no_scrutiny_or_evc_stage():
