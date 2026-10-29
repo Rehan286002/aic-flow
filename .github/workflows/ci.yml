@@ -1,0 +1,93 @@
+name: AIC-Flow Quality Gates CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-checks:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: aic_flow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install uv Package Manager
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.10.0"
+          enable-cache: true
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: uv sync
+
+      - name: Run Backend Pytest Suite
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5433/aic_flow
+          REDIS_URL: redis://localhost:6379/0
+        run: uv run pytest tests/
+
+  frontend-checks:
+    name: Frontend Lint, Tests & Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run Frontend Linter (oxlint)
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Run Frontend Unit Tests
+        working-directory: ./frontend
+        run: npm run test
+
+      - name: Run TypeScript & Vite Production Build
+        working-directory: ./frontend
+        run: npm run build
+

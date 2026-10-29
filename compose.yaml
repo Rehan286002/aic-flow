@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aic_flow}
+      POSTGRES_USER: ${POSTGRES_USER:-aic_flow_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_postgres_password}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2.17-alpine3.21
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-local_dev_redis_password}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-local_dev_redis_password}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4.6@sha256:982e28f90061d0e66eb03276419f589a47c9fa601e985e472fc2f6c64b497ca0
+    container_name: aic-flow-clamav-1
+    ports:
+      - "127.0.0.1:3310:3310"
+    environment:
+      CLAMAV_NO_FRESHCLAM: "false"
+      CLAMD_CONF_StreamMaxLength: "26214400" # 25MB (exceeds 20MB application limit)
+      CLAMD_CONF_MaxScanSize: "104857600" # 100MB
+      CLAMD_CONF_MaxFileSize: "31457280" # 30MB
+    volumes:
+      - clamav_data:/var/lib/clamav
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  clamav_data:

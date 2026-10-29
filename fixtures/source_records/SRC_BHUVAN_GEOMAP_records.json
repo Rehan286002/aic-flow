@@ -1,0 +1,35 @@
+{
+  "_source_code": "SRC_BHUVAN_GEOMAP",
+  "_source_name": "ISRO Bhuvan / Survey of India Geoportal (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "campus_name": "Apex Institute of Technology, Kurla Campus",
+  "registered_entrance_coordinates": {
+    "latitude": 19.0657,
+    "longitude": 72.8792
+  },
+  "cadastral_survey_numbers": [
+    "42/1",
+    "42/2"
+  ],
+  "geospatial_resolution": {
+    "resolved_state": "Maharashtra",
+    "resolved_district": "Mumbai Suburban",
+    "resolved_taluka": "Kurla",
+    "resolved_pincode": "400070",
+    "country": "India"
+  },
+  "bounding_box_coarse_check": {
+    "min_latitude": 8.0,
+    "max_latitude": 37.5,
+    "min_longitude": 68.0,
+    "max_longitude": 97.5,
+    "within_indian_territorial_bounds": true
+  },
+  "cadastral_boundary_polygon_points": 14,
+  "satellite_layer_timestamp": "2025-12-15T08:30:00Z",
+  "survey_authority": "National Remote Sensing Centre (NRSC) / Survey of India (Simulated Reference)"
+}
+

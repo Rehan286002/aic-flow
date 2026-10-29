@@ -1,0 +1,28 @@
+{
+  "_source_code": "SRC_ICAI_UDIN",
+  "_source_name": "ICAI UDIN Verification Portal (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "udin": "26045891AAAAAA1234",
+  "ca_membership_number": "045891",
+  "ca_name": "CA Suresh N. Khandelwal",
+  "ca_firm_registration_number": "102458W",
+  "firm_name": "Khandelwal & Associates, Chartered Accountants",
+  "client_name": "Apex Educational and Charitable Trust",
+  "document_type": "AUDIT_REPORT_FORM_10B",
+  "document_description": "Annual Audited Financial Statements and Balance Sheet for AY 2025-26 (FY 2024-25)",
+  "financial_year": "2024-25",
+  "audit_date": "2025-09-28",
+  "udin_generation_date": "2025-09-28",
+  "figures_in_inr": {
+    "total_gross_income": 84520000.0,
+    "total_operating_expenditure": 79210000.0,
+    "surplus_deficit": 5310000.0,
+    "fixed_assets_net_block": 142800000.0
+  },
+  "status": "ACTIVE",
+  "revocation_reason": null
+}
+

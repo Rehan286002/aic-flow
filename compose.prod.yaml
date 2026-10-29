@@ -1,0 +1,84 @@
+# Production-oriented self-hosted composition. All secrets must be supplied externally.
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    container_name: aic-flow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aic_flow}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.2.17-alpine3.21
+    container_name: aic-flow-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: aic-flow-clamav
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aic-flow-api
+    restart: unless-stopped
+    environment:
+      APP_NAME: AIC-Flow API
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY}
+      JWT_ISSUER: aic-flow
+      JWT_AUDIENCE: aic-flow-api
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?Set CORS_ALLOWED_ORIGINS as a JSON array}
+      ACCESS_COOKIE_NAME: aic_flow_access
+      CSRF_COOKIE_NAME: aic_flow_csrf
+      COOKIE_SAMESITE: none
+      COOKIE_SECURE: "true"
+      MALWARE_SCANNER_TYPE: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      STORAGE_ROOT_DIR: /var/lib/aic-flow/storage
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - document_storage:/var/lib/aic-flow/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+
+volumes:
+  pg_data:
+  redis_data:
+  clamav_db:
+  document_storage:

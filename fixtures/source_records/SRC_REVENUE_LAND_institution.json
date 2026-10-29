@@ -1,0 +1,29 @@
+{
+  "_source_code": "SRC_REVENUE_LAND",
+  "_source_name": "State Revenue and Land Records Department (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "document_reference": "TITLE-DEED-REG-1989-8842",
+  "registered_owner": "Apex Educational and Charitable Trust",
+  "trustee_representative": "Dr. Rajesh Sharma (Chairman)",
+  "parcel_survey_numbers": [
+    "42/1",
+    "42/2"
+  ],
+  "village": "Kurla",
+  "taluka": "Kurla",
+  "district": "Mumbai Suburban",
+  "state": "Maharashtra",
+  "registered_area_sqm": 21245.0,
+  "registered_area_acres": 5.25,
+  "land_use_category": "EDUCATIONAL_INSTITUTIONAL",
+  "land_ownership_type": "OWNED_FREEHOLD",
+  "encumbrance_status": "FREE_OF_ALL_ENCUMBRANCES",
+  "registration_date": "1989-03-22",
+  "registration_book_number": "I-4421/1989",
+  "issuing_sub_registrar_office": "Sub-Registrar Office Kurla-3",
+  "mutation_entry_number": "ME-8902-KRL"
+}
+

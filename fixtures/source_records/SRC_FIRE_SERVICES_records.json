@@ -1,0 +1,21 @@
+{
+  "_source_code": "SRC_FIRE_SERVICES",
+  "_source_name": "State Fire and Emergency Services Directorate (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "fire_noc_certificate_number": "FIRE-NOC-MH-2025-7782",
+  "issued_to": "Apex Institute of Technology",
+  "building_name": "Main Engineering Block",
+  "campus_survey_number": "Survey No. 42/1, 42/2, Kurla",
+  "issue_date": "2025-04-10",
+  "valid_until": "2026-04-09",
+  "building_height_meters": 14.8,
+  "occupancy_type": "EDUCATIONAL_BUILDING",
+  "fire_systems_operational": true,
+  "inspection_officer": "Divisional Fire Officer, Mumbai Fire Brigade",
+  "compliance_status": "EXPIRED",
+  "renewal_application_pending": false
+}
+

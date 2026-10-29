@@ -1,0 +1,21 @@
+{
+  "_source_code": "SRC_MUNICIPAL_BLDG",
+  "_source_name": "Municipal Town Planning & Building Authority (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "sanction_plan_order_no": "MCGM-BP-1989-4412",
+  "sanction_date": "1989-06-18",
+  "occupancy_certificate_number": "MCGM-OCC-1990-0891",
+  "occupancy_certificate_date": "1990-05-15",
+  "building_completion_date": "1990-05-15",
+  "building_use": "INSTITUTIONAL_COLLEGE",
+  "building_name": "Main Engineering Block (Wings A & B)",
+  "total_constructed_area_sqm": 14250.0,
+  "number_of_floors": 4,
+  "occupancy_status": "FULL_PERMANENT",
+  "issuing_authority": "Municipal Corporation of Greater Mumbai (Building Proposal Dept)",
+  "competent_officer": "Executive Engineer (BP) Special Cell"
+}
+

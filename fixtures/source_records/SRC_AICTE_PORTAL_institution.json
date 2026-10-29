@@ -1,0 +1,45 @@
+{
+  "_source_code": "SRC_AICTE_PORTAL",
+  "_source_name": "AICTE Master Institutional Portal (SYNTHETIC)",
+  "_provenance": "SIMULATED",
+  "_environment": "SIMULATED",
+  "_synthetic_note": "Synthetic fixture for SIH PS 26261 prototype evaluation only. Not an actual government API response.",
+  "aicte_permanent_id": "SYNTH-AICTE-0001",
+  "institution_name": "Apex Institute of Technology",
+  "legal_entity_name": "Apex Educational and Charitable Trust",
+  "trust_registration_number": "TR-1988-MUM-4521",
+  "trust_registration_date": "1988-11-14",
+  "establishment_year": 1989,
+  "institution_type": "ENGINEERING_AND_TECHNOLOGY",
+  "approval_status": "APPROVED",
+  "current_eoa_academic_year": "2025-26",
+  "address": {
+    "campus_name": "Apex Technical Campus",
+    "survey_number": "Survey No. 42/1, 42/2",
+    "village_taluka": "Kurla",
+    "district": "Mumbai Suburban",
+    "state": "Maharashtra",
+    "pincode": "400070"
+  },
+  "declared_coordinates": {
+    "latitude": 19.0657,
+    "longitude": 72.8792
+  },
+  "sanctioned_land_acres": 5.25,
+  "approved_total_builtup_area_sqm": 14250.0,
+  "programs_offered": [
+    {
+      "program": "ENGINEERING_AND_TECHNOLOGY",
+      "level": "UNDER_GRADUATE",
+      "course": "COMPUTER_SCIENCE_AND_ENGINEERING",
+      "intake": 120
+    },
+    {
+      "program": "ENGINEERING_AND_TECHNOLOGY",
+      "level": "UNDER_GRADUATE",
+      "course": "INFORMATION_TECHNOLOGY",
+      "intake": 60
+    }
+  ]
+}
+
