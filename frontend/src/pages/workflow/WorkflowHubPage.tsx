@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bell, CalendarClock, Clock3, FileCheck, FileText, MapPin, RefreshCw, Search, ShieldCheck, Video, Workflow } from 'lucide-react';
+import { Bell, CalendarClock, Clock3, FileCheck, FileText, Gavel, MapPin, RefreshCw, Search, ShieldCheck, Video, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { workflowApi, type WorkflowCase, type WorkflowDetail, type WorkflowNotification } from '@/features/workflow/api';
@@ -9,7 +9,7 @@ import { documentsApi } from '@/features/documents/api';
 import type { ApplicationRequirementItem } from '@/types/application';
 import type { DocumentUploadResponse } from '@/types/document';
 
-const stageLabel = (value: string) => value === 'COMMITTEE_PROCEEDINGS' ? 'Standing Hearing Committee (SHC)' : value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
+const stageLabel = (value: string) => value === 'COMMITTEE_PROCEEDINGS' ? 'Standing Hearing Committee (SHC)' : value === 'AWAITING_AUTHORITY' ? 'Executive Committee Decision' : value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleDateString() : 'Not set';
 const dateTimeLabel = (value: string | null) => value ? new Date(value).toLocaleString() : 'Not set';
 const stageAgeDays = (value: string) => Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
@@ -65,6 +65,22 @@ export default function WorkflowHubPage() {
   const [evcReportOutcome, setEvcReportOutcome] = useState<'NO_DEFICIENCY_RECORDED' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE'>('INCONCLUSIVE');
   const [evcReportNote, setEvcReportNote] = useState('');
   const [evcCancelReason, setEvcCancelReason] = useState('');
+  const [shcHearingMode, setShcHearingMode] = useState<'ONLINE' | 'IN_PERSON'>('ONLINE');
+  const [shcHearingAt, setShcHearingAt] = useState('');
+  const [shcHearingDetails, setShcHearingDetails] = useState('');
+  const [shcNoticeReference, setShcNoticeReference] = useState('');
+  const [shcOfficialReference, setShcOfficialReference] = useState('');
+  const [shcSubmissionReference, setShcSubmissionReference] = useState('');
+  const [shcSubmissionNote, setShcSubmissionNote] = useState('');
+  const [shcRepOneName, setShcRepOneName] = useState('');
+  const [shcRepOneDesignation, setShcRepOneDesignation] = useState('');
+  const [shcRepTwoName, setShcRepTwoName] = useState('');
+  const [shcRepTwoDesignation, setShcRepTwoDesignation] = useState('');
+  const [shcHearingSummary, setShcHearingSummary] = useState('');
+  const [shcHearingNote, setShcHearingNote] = useState('');
+  const [shcRecommendationCode, setShcRecommendationCode] = useState<'COMPLIANCE_REVIEWED' | 'FURTHER_COMPLIANCE_REQUIRED' | 'DEFICIENCIES_REMAIN' | 'INCONCLUSIVE'>('INCONCLUSIVE');
+  const [shcRecommendationText, setShcRecommendationText] = useState('');
+  const [shcRecommendationReference, setShcRecommendationReference] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -154,7 +170,7 @@ export default function WorkflowHubPage() {
     if (role === 'EVC_MEMBER' && stage === 'EVC_SCHEDULED' && selected.evc_visit?.status === 'COMPLETED') return ['EVC_COMPLETED'];
     if (role === 'COMMITTEE_SECRETARIAT') {
       if (stage === 'EVC_COMPLETED' && requiresCommittee) return ['COMMITTEE_PROCEEDINGS'];
-      if (stage === 'COMMITTEE_PROCEEDINGS') return ['AWAITING_AUTHORITY'];
+      if (stage === 'COMMITTEE_PROCEEDINGS' && selected.shc_proceeding?.status === 'RECOMMENDATION_RECORDED') return ['AWAITING_AUTHORITY'];
     }
     if (role === 'COMPETENT_AUTHORITY' && stage === 'AWAITING_AUTHORITY') {
       return ['APPROVED', 'APPROVED_WITH_CONDITIONS', 'REJECTED', 'ON_HOLD'];
