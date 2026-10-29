@@ -8,6 +8,9 @@ from app.services.workflow_service import (
     evc_completion_assignee,
     intake_review_assignee,
     route_profile_for,
+    validate_shc_hearing_record,
+    validate_shc_recommendation,
+    validate_shc_stage,
     validate_evc_report_stage,
     validate_evc_schedule_stage,
     validate_operational_event,
@@ -38,6 +41,39 @@ def test_evc_completion_routes_to_shc_only_when_applicability_is_confirmed():
     assert evc_completion_assignee({"requires_committee": True}) == "COMMITTEE_SECRETARIAT"
     assert evc_completion_assignee({"requires_committee": False}) == "REGIONAL_OFFICER"
     assert evc_completion_assignee({"requires_committee": None}) == "REGIONAL_OFFICER"
+
+
+def test_shc_proceeding_requires_route_confirmed_committee_stage():
+    validate_shc_stage(case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}))
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_stage(case("COMMITTEE_PROCEEDINGS", {"requires_committee": None}))
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_stage(case("EVC_COMPLETED", {"requires_committee": True}))
+    assert exc.value.status_code == 409
+
+
+def test_shc_hearing_requires_a_scheduled_proceeding():
+    validate_shc_hearing_record(
+        case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+        SimpleNamespace(status="SCHEDULED", hearing_scheduled_at=None),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_hearing_record(case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}), None)
+    assert exc.value.status_code == 409
+
+
+def test_shc_recommendation_requires_hearing_record():
+    validate_shc_recommendation(
+        case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+        SimpleNamespace(status="HEARING_RECORDED"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_recommendation(
+            case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+            SimpleNamespace(status="SCHEDULED"),
+        )
+    assert exc.value.status_code == 409
 
 
 def test_eoa_self_disclosure_has_no_scrutiny_or_evc_stage():
