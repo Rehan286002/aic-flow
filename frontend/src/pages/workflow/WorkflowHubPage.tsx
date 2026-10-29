@@ -290,6 +290,109 @@ export default function WorkflowHubPage() {
     }
   };
 
+
+  const scheduleShc = async () => {
+    if (!selected || !shcHearingAt || shcHearingDetails.trim().length < 5) {
+      toast.error('Enter the hearing date and time and the hearing details.');
+      return;
+    }
+    const hearingAt = new Date(shcHearingAt);
+    if (Number.isNaN(hearingAt.getTime()) || hearingAt <= new Date()) {
+      toast.error('The SHC hearing must be scheduled for a future date and time.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.scheduleShcHearing(selected.workflow_case_id, {
+        hearing_mode: shcHearingMode,
+        hearing_scheduled_at: hearingAt.toISOString(),
+        hearing_details: shcHearingDetails.trim(),
+        notice_reference: shcNoticeReference.trim() || null,
+        official_schedule_reference: shcOfficialReference.trim() || null,
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('SHC hearing schedule recorded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not schedule the SHC hearing.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitShcCompliance = async () => {
+    if (!selected?.shc_proceeding || shcSubmissionReference.trim().length < 5 || shcSubmissionNote.trim().length < 8) {
+      toast.error('Enter the compliance submission reference and a note.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.submitShcCompliance(selected.shc_proceeding.shc_proceeding_id, {
+        submission_reference: shcSubmissionReference.trim(),
+        note: shcSubmissionNote.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setShcSubmissionNote('');
+      await refresh();
+      toast.success('Compliance submission reference recorded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the compliance submission.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordShcHearing = async () => {
+    if (!selected?.shc_proceeding ||
+        shcRepOneName.trim().length < 2 || shcRepOneDesignation.trim().length < 2 ||
+        shcRepTwoName.trim().length < 2 || shcRepTwoDesignation.trim().length < 2 ||
+        shcHearingSummary.trim().length < 15 || shcHearingNote.trim().length < 8) {
+      toast.error('Complete both institution representatives and the hearing record.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordShcHearing(selected.shc_proceeding.shc_proceeding_id, {
+        representative_one_name: shcRepOneName.trim(),
+        representative_one_designation: shcRepOneDesignation.trim(),
+        representative_two_name: shcRepTwoName.trim(),
+        representative_two_designation: shcRepTwoDesignation.trim(),
+        hearing_summary: shcHearingSummary.trim(),
+        note: shcHearingNote.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setShcHearingNote('');
+      await refresh();
+      toast.success('SHC hearing record saved.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the SHC hearing.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordShcRecommendation = async () => {
+    if (!selected?.shc_proceeding || shcRecommendationText.trim().length < 15) {
+      toast.error('Enter the SHC recommendation and supporting reasons.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordShcRecommendation(selected.shc_proceeding.shc_proceeding_id, {
+        recommendation_code: shcRecommendationCode,
+        recommendation_text: shcRecommendationText.trim(),
+        recommendation_reference: shcRecommendationReference.trim() || null,
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('SHC recommendation recorded for Executive Committee consideration.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the SHC recommendation.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createCondition = async () => {
     if (!selected || !conditionTitle || !conditionDescription || !conditionSource || !conditionDue) { toast.error('Complete all condition fields.'); return; }
     setBusy(true);
