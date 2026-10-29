@@ -1,6 +1,6 @@
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DemoRoleSelector } from './DemoRoleSelector';
+import { RoleScopeSelector } from './DemoRoleSelector';
 import { NotificationPopover } from './NotificationPopover';
 import { UserMenu } from './UserMenu';
 import { AppBreadcrumbs } from './Breadcrumbs';
