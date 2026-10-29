@@ -202,14 +202,6 @@ export default function WorkflowHubPage() {
     finally { setBusy(false); }
   };
 
-  const recordEvent = async (eventType: string, prompt: string) => {
-    if (!selected || note.trim().length < 8) { toast.error(prompt); return; }
-    setBusy(true);
-    try { await workflowApi.event(selected.workflow_case_id, eventType, note.trim()); setNote(''); setSelected(await workflowApi.detail(selected.workflow_case_id)); await refresh(); toast.success('Timeline event recorded.'); }
-    catch (err) { toast.error(err instanceof Error ? err.message : 'Could not record event.'); }
-    finally { setBusy(false); }
-  };
-
 
   const scheduleEvc = async () => {
     if (!selected || !evcStartAt || evcVenue.trim().length < 5 || evcCoordinationNote.trim().length < 8) {
