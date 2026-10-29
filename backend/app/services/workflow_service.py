@@ -452,6 +452,15 @@ def intake_review_assignee(route_snapshot: dict[str, Any] | None) -> str:
     )
 
 
+def evc_completion_assignee(route_snapshot: dict[str, Any] | None) -> str:
+    """Route a completed EVC to SHC only when its applicability is confirmed."""
+    return (
+        "COMMITTEE_SECRETARIAT"
+        if (route_snapshot or {}).get("requires_committee") is True
+        else "REGIONAL_OFFICER"
+    )
+
+
 def transition_case(
     db: Session,
     case: WorkflowCase,
@@ -483,11 +492,7 @@ def transition_case(
     elif to_stage == "EVC_SCHEDULED":
         case.assigned_role_code = "EVC_MEMBER"
     elif to_stage == "EVC_COMPLETED":
-        case.assigned_role_code = (
-            "COMMITTEE_SECRETARIAT"
-            if (case.route_snapshot or {}).get("requires_committee") is True
-            else "REGIONAL_OFFICER"
-        )
+        case.assigned_role_code = evc_completion_assignee(case.route_snapshot)
     elif to_stage == "COMMITTEE_PROCEEDINGS":
         case.assigned_role_code = "COMMITTEE_SECRETARIAT"
     elif to_stage in {"AWAITING_AUTHORITY", "APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED", "ON_HOLD"}:
