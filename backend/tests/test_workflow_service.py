@@ -3,11 +3,26 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.services.workflow_service import case_access_context, route_profile_for, validate_operational_event, validate_transition
+from app.services.workflow_service import case_access_context, intake_review_assignee, route_profile_for, validate_operational_event, validate_transition
 
 
 def case(stage: str, route: dict):
     return SimpleNamespace(current_stage=stage, route_snapshot=route)
+
+
+def test_intake_review_assignment_stays_with_intake_for_eoa_route():
+    _code, _version, snapshot = route_profile_for("EOA_SELF_DISCLOSURE")
+    assert intake_review_assignee(snapshot) == "INTAKE_OFFICER"
+
+
+def test_intake_review_assignment_hands_increase_intake_to_scrutiny():
+    _code, _version, snapshot = route_profile_for("INCREASE_INTAKE")
+    assert intake_review_assignee(snapshot) == "SCRUTINY_OFFICER"
+
+
+def test_unknown_route_does_not_auto_assign_scrutiny():
+    _code, _version, snapshot = route_profile_for("UNCONFIGURED_CATEGORY")
+    assert intake_review_assignee(snapshot) == "INTAKE_OFFICER"
 
 
 def test_eoa_self_disclosure_has_no_scrutiny_or_evc_stage():
