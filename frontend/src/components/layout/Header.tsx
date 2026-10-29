@@ -43,7 +43,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         </div>
 
         {/* Workspace Selector */}
-        <DemoRoleSelector />
+        <RoleScopeSelector />
 
         {/* Notification Bell */}
         <NotificationPopover />
