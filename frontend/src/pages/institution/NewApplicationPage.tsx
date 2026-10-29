@@ -188,12 +188,12 @@ export default function NewApplicationPage() {
                     <RadioGroupItem value="INCREASE_INTAKE" id="process-increase" />
                     <Label htmlFor="process-increase" className="cursor-pointer space-y-1">
                       <span className="block text-xs font-semibold text-slate-900">Increase in Intake</span>
-                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">Partial configured route: scrutiny and EVC. Committee applicability requires policy confirmation.</span>
+                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">The route includes scrutiny and EVC coordination. The applicable hearing stage is determined by the approved regulatory route.</span>
                     </Label>
                   </div>
                 </div>
               </RadioGroup>
-              <p className="text-[11px] text-slate-500">The selected category, baseline handbook version and route snapshot are stored with the application. Unsupported categories remain blocked until an authorised policy route is confirmed.</p>
+              <p className="text-[11px] text-slate-500">The selected category, academic year and applicable regulatory route are recorded with the application. Category-specific processing follows the effective policy route.</p>
             </div>
             {/* Core Parameters Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
