@@ -8,6 +8,7 @@ must never be used to create accounts or institution records in a real service.
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -58,6 +59,7 @@ ADMIN_EMAIL = "admin@aic-verify.internal"
 AUDITOR_EMAIL = "auditor@aic-verify.internal"
 LEAD_AUDITOR_EMAIL = "lead@aic-verify.internal"
 REVIEW_TEAM_NAME = "Western Region Review Team"
+REVIEW_TEAM_ID = uuid.UUID("9533f553-82be-44ac-9d46-85936fdec003")
 BASELINE_DOCUMENT_FILENAME = "ci_baseline_affidavit.pdf"
 
 
@@ -152,8 +154,8 @@ def seed_identity(db):
         db, INSTITUTION_EMAIL, "CI Institution Representative"
     )
     admin_user = get_or_create_user(db, ADMIN_EMAIL, "CI Platform Administrator")
-    auditor_user = get_or_create_user(db, AUDITOR_EMAIL, "CI Scrutiny Auditor")
-    lead_user = get_or_create_user(db, LEAD_AUDITOR_EMAIL, "CI Lead Auditor")
+    auditor_user = get_or_create_user(db, AUDITOR_EMAIL, "Synthetic Auditor")
+    lead_user = get_or_create_user(db, LEAD_AUDITOR_EMAIL, "Synthetic Lead Auditor")
 
     institution_membership = db.scalar(
         select(InstitutionMembership).where(
@@ -175,12 +177,15 @@ def seed_identity(db):
     )
     if review_team is None:
         review_team = ReviewTeam(
+            review_team_id=REVIEW_TEAM_ID,
             team_name=REVIEW_TEAM_NAME,
             description="Isolated CI review team; not a real AICTE unit.",
             is_active=True,
         )
         db.add(review_team)
         db.flush()
+    elif review_team.review_team_id != REVIEW_TEAM_ID:
+        raise RuntimeError("Existing CI review team has an unexpected fixture ID.")
 
     for member, team_role in (
         (auditor_user, TeamRole.AUDITOR),
@@ -242,7 +247,6 @@ def seed_application_and_document(db, institution, institution_user, review_team
             process_type="EOA_SELF_DISCLOSURE",
             academic_year="2026-27",
             status=ApplicationStatus.DRAFT,
-            review_team_id=review_team.review_team_id,
             created_by=institution_user.user_id,
         )
         db.add(application)
@@ -259,7 +263,8 @@ def seed_application_and_document(db, institution, institution_user, review_team
             raise RuntimeError(
                 f"CI baseline application {APPLICATION_NUMBER} exists with unexpected attributes."
             )
-        application.review_team_id = review_team.review_team_id
+        # The default baseline case is intentionally unassigned. Individual tests
+        # assign it to a reviewer team when exercising team-scoped access.
 
     revision = db.scalar(
         select(ApplicationRevision).where(
