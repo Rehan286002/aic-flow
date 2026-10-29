@@ -29,8 +29,8 @@ export const ROLES: Record<Role, RoleConfig> = {
   auditor: {
     id: 'auditor',
     name: 'Auditor',
-    label: 'Auditor Verification Workspace',
-    shortDescription: 'Document verification, discrepancy triage & finding review',
+    label: 'Processing Officer Workspace',
+    shortDescription: 'Application intake, scrutiny, evidence review and case routing',
     defaultPath: '/workflow',
     userDisplayName: 'Processing Officer',
     userTitle: 'Senior Regulatory Auditor',
@@ -41,8 +41,8 @@ export const ROLES: Record<Role, RoleConfig> = {
   lead: {
     id: 'lead',
     name: 'Lead Auditor',
-    label: 'Lead Auditor Oversight',
-    shortDescription: 'Escalation review, temporal compliance replay & final recommendations',
+    label: 'Senior Regulatory Workspace',
+    shortDescription: 'Regional coordination, supervisory oversight and compliance closure',
     defaultPath: '/workflow',
     userDisplayName: 'Senior Officer',
     userTitle: 'Lead Compliance Auditor',
@@ -53,8 +53,8 @@ export const ROLES: Record<Role, RoleConfig> = {
   admin: {
     id: 'admin',
     name: 'Admin',
-    label: 'System & Rule Administration',
-    shortDescription: 'User management, rule configurations & simulated connector health',
+    label: 'Platform Administration',
+    shortDescription: 'Platform access, service health and operational configuration',
     defaultPath: '/workflow',
     userDisplayName: 'Platform Administrator',
     userTitle: 'Platform Administrator',
