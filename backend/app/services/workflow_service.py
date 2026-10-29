@@ -276,6 +276,16 @@ def cancel_evc_visit(
     return visit
 
 
+def validate_ec_decision_stage(case: WorkflowCase, role_code: str) -> None:
+    validate_ec_decision_stage(case, role_code)
+
+
+def calculate_appeal_deadline(speaking_order_uploaded_at: datetime) -> datetime:
+    if speaking_order_uploaded_at.tzinfo is None or speaking_order_uploaded_at.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Speaking Order upload time must include a timezone.")
+    return speaking_order_uploaded_at.astimezone(UTC) + timedelta(days=7)
+
+
 def record_executive_committee_decision(
     db: Session,
     case: WorkflowCase,
@@ -300,8 +310,6 @@ def record_executive_committee_decision(
     )
     if existing is not None:
         raise HTTPException(status_code=409, detail="An Executive Committee decision is already recorded for this case.")
-    if speaking_order_uploaded_at.tzinfo is None or speaking_order_uploaded_at.utcoffset() is None:
-        raise HTTPException(status_code=422, detail="Speaking Order upload time must include a timezone.")
     uploaded_at = speaking_order_uploaded_at.astimezone(UTC)
     now = datetime.now(UTC)
     if uploaded_at > now:
@@ -317,7 +325,7 @@ def record_executive_committee_decision(
         decision_reasons=decision_reasons.strip(),
         speaking_order_reference=speaking_order_reference.strip(),
         speaking_order_uploaded_at=uploaded_at,
-        appeal_deadline_at=uploaded_at + timedelta(days=7),
+        appeal_deadline_at=calculate_appeal_deadline(uploaded_at),
         recorded_by=actor_user_id,
     )
     db.add(decision)
