@@ -43,10 +43,37 @@ export interface ComplianceObligation {
   verification_note: string | null;
 }
 
+export interface EVCVisit {
+  evc_visit_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  status: 'DETAILS_REQUIRED' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+  visit_mode: 'ONLINE' | 'OFFLINE' | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  venue_or_meeting_details: string | null;
+  official_schedule_reference: string | null;
+  institution_contact_name: string | null;
+  institution_contact_email: string | null;
+  coordination_note: string | null;
+  schedule_revision: number;
+  report_reference: string | null;
+  report_summary: string | null;
+  report_outcome: 'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE' | null;
+  report_recorded_by: string | null;
+  report_recorded_at: string | null;
+  cancellation_reason: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkflowDetail extends WorkflowCase {
   requirements: ApplicationRequirementItem[];
   events: WorkflowEvent[];
   obligations: ComplianceObligation[];
+  evc_visit: EVCVisit | null;
 }
 
 export interface WorkflowNotification {
@@ -70,6 +97,30 @@ export const workflowApi = {
   assign: (id: string, review_team_id: string, note: string) =>
     request<WorkflowDetail>(`/api/v1/workflow/cases/${id}/assign`, {
       method: 'POST', body: JSON.stringify({ review_team_id, assigned_role_code: 'INTAKE_OFFICER', note }),
+    }, true),
+  scheduleEvcVisit: (caseId: string, payload: {
+    visit_mode: 'ONLINE' | 'OFFLINE';
+    scheduled_start_at: string;
+    scheduled_end_at?: string | null;
+    venue_or_meeting_details: string;
+    official_schedule_reference?: string | null;
+    institution_contact_name?: string | null;
+    institution_contact_email?: string | null;
+    coordination_note: string;
+  }) => request<EVCVisit>(`/api/v1/workflow/cases/${caseId}/evc-visit`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordEvcReport: (visitId: string, payload: {
+    report_reference: string;
+    report_summary: string;
+    report_outcome: 'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE';
+    note: string;
+  }) => request<EVCVisit>(`/api/v1/workflow/evc-visits/${visitId}/report`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  cancelEvcVisit: (visitId: string, reason: string) =>
+    request<EVCVisit>(`/api/v1/workflow/evc-visits/${visitId}/cancel`, {
+      method: 'POST', body: JSON.stringify({ reason }),
     }, true),
   event: (id: string, event_type: string, summary: string) =>
     request<WorkflowEvent>(`/api/v1/workflow/cases/${id}/events`, {
