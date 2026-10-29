@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.CheckConstraint("visit_mode IS NULL OR visit_mode IN ('ONLINE', 'OFFLINE')", name="chk_evc_visits_mode"),
         sa.CheckConstraint("scheduled_end_at IS NULL OR scheduled_start_at IS NULL OR scheduled_end_at > scheduled_start_at", name="chk_evc_visits_time_order"),
         sa.CheckConstraint("status <> 'SCHEDULED' OR (visit_mode IS NOT NULL AND scheduled_start_at IS NOT NULL AND venue_or_meeting_details IS NOT NULL AND schedule_revision > 0)", name="chk_evc_visits_scheduled_details"),
+        sa.CheckConstraint("report_outcome IS NULL OR report_outcome IN ('NO_DEFICIENCY_RECORDED', 'DEFICIENCIES_OBSERVED', 'FOLLOW_UP_REQUIRED', 'INCONCLUSIVE')", name="chk_evc_visits_report_outcome"),
         sa.CheckConstraint("status <> 'COMPLETED' OR (report_reference IS NOT NULL AND report_summary IS NOT NULL AND report_outcome IS NOT NULL AND report_recorded_at IS NOT NULL AND report_recorded_by IS NOT NULL)", name="chk_evc_visits_completed_report"),
         sa.CheckConstraint("status <> 'CANCELLED' OR cancellation_reason IS NOT NULL", name="chk_evc_visits_cancellation_reason"),
     )
