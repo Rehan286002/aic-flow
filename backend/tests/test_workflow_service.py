@@ -1,13 +1,16 @@
 from types import SimpleNamespace
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
 
 from app.services.workflow_service import (
+    calculate_appeal_deadline,
     case_access_context,
     evc_completion_assignee,
     intake_review_assignee,
     route_profile_for,
+    validate_ec_decision_stage,
     validate_shc_hearing_record,
     validate_shc_recommendation,
     validate_shc_stage,
@@ -74,6 +77,21 @@ def test_shc_recommendation_requires_hearing_record():
             SimpleNamespace(status="SCHEDULED"),
         )
     assert exc.value.status_code == 409
+
+
+def test_executive_committee_decision_requires_authority_and_correct_stage():
+    validate_ec_decision_stage(case("AWAITING_AUTHORITY", {}), "COMPETENT_AUTHORITY")
+    with pytest.raises(HTTPException) as exc:
+        validate_ec_decision_stage(case("AWAITING_AUTHORITY", {}), "COMMITTEE_SECRETARIAT")
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException) as exc:
+        validate_ec_decision_stage(case("EVC_COMPLETED", {}), "COMPETENT_AUTHORITY")
+    assert exc.value.status_code == 409
+
+
+def test_speaking_order_upload_starts_seven_day_appeal_window():
+    uploaded_at = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
+    assert calculate_appeal_deadline(uploaded_at) == datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 
 
 def test_eoa_self_disclosure_has_no_scrutiny_or_evc_stage():
