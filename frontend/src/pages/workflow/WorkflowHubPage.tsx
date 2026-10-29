@@ -11,6 +11,11 @@ import type { DocumentUploadResponse } from '@/types/document';
 
 const stageLabel = (value: string) => value === 'COMMITTEE_PROCEEDINGS' ? 'Standing Hearing Committee (SHC)' : value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleDateString() : 'Not set';
+const stageAgeDays = (value: string) => Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
+const ageLabel = (value: string) => {
+  const days = stageAgeDays(value);
+  return days === 0 ? 'Entered today' : `${days} day${days === 1 ? '' : 's'} in stage`;
+};
 
 const ROLE_GUIDANCE: Record<string, { title: string; description: string }> = {
   INSTITUTION_USER: { title: 'Institution representative', description: 'Prepare applications, submit required documents, respond to clarifications and provide evidence against approval conditions.' },
@@ -113,8 +118,12 @@ export default function WorkflowHubPage() {
     if (['INTAKE_OFFICER', 'AUDITOR'].includes(role)) {
       if (stage === 'SUBMITTED') return ['INTAKE_REVIEW'];
       if (stage === 'RESUBMITTED' && !requiresScrutiny) return ['INTAKE_REVIEW'];
-      if (stage === 'INTAKE_REVIEW' && !requiresScrutiny) return ['AWAITING_AUTHORITY'];
-      if (stage === 'INTAKE_REVIEW' && requiresScrutiny && role === 'AUDITOR') return ['SCRUTINY'];
+      if (stage === 'INTAKE_REVIEW') {
+        const actions = ['CLARIFICATION_REQUESTED'];
+        if (!requiresScrutiny) actions.push('AWAITING_AUTHORITY');
+        if (requiresScrutiny && role === 'AUDITOR') actions.push('SCRUTINY');
+        return actions;
+      }
     }
     if (['SCRUTINY_OFFICER', 'AUDITOR'].includes(role)) {
       if ((stage === 'INTAKE_REVIEW' || stage === 'RESUBMITTED') && requiresScrutiny) return ['SCRUTINY'];
@@ -245,9 +254,10 @@ export default function WorkflowHubPage() {
 
       {ROLE_GUIDANCE[role] && <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3"><div className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Your workspace · {ROLE_GUIDANCE[role].title}</div><p className="mt-1 text-xs leading-relaxed text-slate-600">{ROLE_GUIDANCE[role].description}</p></div>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Cases in your scope</div><div className="mt-1 text-2xl font-bold text-slate-900">{cases.length}</div></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Awaiting action</div><div className="mt-1 text-2xl font-bold text-amber-600">{cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).length}</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-xs font-medium text-slate-500">Oldest active case</div><div className="mt-1 text-2xl font-bold text-slate-900">{cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).length ? Math.max(...cases.filter((c) => !['CLOSED', 'APPROVED', 'REJECTED'].includes(c.current_stage)).map((c) => stageAgeDays(c.stage_entered_at))) : 0}<span className="ml-1 text-xs font-medium text-slate-500">days</span></div></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-1 text-xs font-medium text-slate-500"><Bell className="size-3.5"/> Unread notifications</div><div className="mt-1 text-2xl font-bold text-indigo-700">{notifications.filter((n) => !n.read_at).length}</div></div>
       </div>
 
@@ -263,7 +273,7 @@ export default function WorkflowHubPage() {
               </div>
             </div>
           </div>
-          {cases.length === 0 ? <div className="p-8 text-center"><FileText className="mx-auto size-8 text-slate-300"/><p className="mt-2 text-sm font-medium text-slate-700">No workflow cases in this scope</p><p className="mt-1 text-xs text-slate-500">Create an institution application or ask an administrator to assign your role to a review team.</p></div> : visibleCases.length === 0 ? <div className="p-8 text-center"><Search className="mx-auto size-7 text-slate-300"/><p className="mt-2 text-sm font-medium text-slate-700">No matching cases</p><p className="mt-1 text-xs text-slate-500">Change the search text or select another queue filter.</p></div> : <div className="divide-y divide-slate-100">{visibleCases.map((item) => <button key={item.workflow_case_id} onClick={() => void openCase(item)} className={`block w-full px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.workflow_case_id === item.workflow_case_id ? 'bg-indigo-50/70' : ''}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-slate-900">{item.application_number}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{stageLabel(item.current_stage)}</span></div><div className="mt-1 text-xs text-slate-600">{item.institution_name}</div><div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400"><span>{item.process_type}</span><span>AY {item.academic_year}</span><span>Due: {dateLabel(item.due_at)}</span></div></button>)}</div>}
+          {cases.length === 0 ? <div className="p-8 text-center"><FileText className="mx-auto size-8 text-slate-300"/><p className="mt-2 text-sm font-medium text-slate-700">No workflow cases in this scope</p><p className="mt-1 text-xs text-slate-500">Create an institution application or ask an administrator to assign your role to a review team.</p></div> : visibleCases.length === 0 ? <div className="p-8 text-center"><Search className="mx-auto size-7 text-slate-300"/><p className="mt-2 text-sm font-medium text-slate-700">No matching cases</p><p className="mt-1 text-xs text-slate-500">Change the search text or select another queue filter.</p></div> : <div className="divide-y divide-slate-100">{visibleCases.map((item) => <button key={item.workflow_case_id} onClick={() => void openCase(item)} className={`block w-full px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.workflow_case_id === item.workflow_case_id ? 'bg-indigo-50/70' : ''}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-slate-900">{item.application_number}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{stageLabel(item.current_stage)}</span></div><div className="mt-1 text-xs text-slate-600">{item.institution_name}</div><div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400"><span>{item.process_type}</span><span>AY {item.academic_year}</span><span>{ageLabel(item.stage_entered_at)}</span><span>Due: {dateLabel(item.due_at)}</span></div></button>)}</div>}
         </section>
 
         <section className="space-y-4">
