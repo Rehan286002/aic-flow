@@ -1,4 +1,4 @@
-"""AIC-Verify — Rule Evaluator for EOA-SD-04: Structural Stability Certificate.
+"""Rule Evaluator for EOA-SD-04: Structural Stability Certificate.
 
 Regulatory Reference:
 AICTE Approval Process Handbook (APH) 2024–2027 Annexure 2.1 Item iv:
@@ -30,7 +30,7 @@ from app.rules.base import (
 
 logger = logging.getLogger(__name__)
 
-# Fixed prototype assessment reference date for Academic Year 2026-27 evaluation
+# AY 2026–27 structural-stability assessment reference date
 DEFAULT_ASSESSMENT_DATE = date(2026, 7, 1)
 
 
