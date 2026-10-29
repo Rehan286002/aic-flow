@@ -283,6 +283,20 @@ def validate_shc_stage(case: WorkflowCase) -> None:
         raise HTTPException(status_code=409, detail="SHC actions are available only during the SHC proceeding stage.")
 
 
+def validate_shc_hearing_record(case: WorkflowCase, proceeding: SHCProceeding | None) -> None:
+    validate_shc_stage(case)
+    if proceeding is None or proceeding.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="A scheduled SHC hearing is required before recording the hearing.")
+    if proceeding.hearing_scheduled_at is not None and proceeding.hearing_scheduled_at > datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="The SHC hearing cannot be recorded before its scheduled date and time.")
+
+
+def validate_shc_recommendation(case: WorkflowCase, proceeding: SHCProceeding | None) -> None:
+    validate_shc_stage(case)
+    if proceeding is None or proceeding.status != "HEARING_RECORDED":
+        raise HTTPException(status_code=409, detail="Record the SHC hearing before recording its recommendation.")
+
+
 def schedule_shc_hearing(
     db: Session,
     case: WorkflowCase,
@@ -389,11 +403,8 @@ def record_shc_hearing(
     hearing_summary: str,
     note: str,
 ) -> SHCProceeding:
-    validate_shc_stage(case)
-    if proceeding is None or proceeding.status != "SCHEDULED":
-        raise HTTPException(status_code=409, detail="A scheduled SHC hearing is required before recording the hearing.")
-    if proceeding.hearing_scheduled_at is not None and proceeding.hearing_scheduled_at > datetime.now(UTC):
-        raise HTTPException(status_code=409, detail="The SHC hearing cannot be recorded before its scheduled date and time.")
+    validate_shc_hearing_record(case, proceeding)
+    assert proceeding is not None
     if representative_one_name.strip().casefold() == representative_two_name.strip().casefold():
         raise HTTPException(status_code=422, detail="Record the two institution representatives separately.")
     now = datetime.now(UTC)
@@ -435,9 +446,8 @@ def record_shc_recommendation(
     recommendation_text: str,
     recommendation_reference: str | None,
 ) -> SHCProceeding:
-    validate_shc_stage(case)
-    if proceeding is None or proceeding.status != "HEARING_RECORDED":
-        raise HTTPException(status_code=409, detail="Record the SHC hearing before recording its recommendation.")
+    validate_shc_recommendation(case, proceeding)
+    assert proceeding is not None
     now = datetime.now(UTC)
     proceeding.status = "RECOMMENDATION_RECORDED"
     proceeding.recommendation_code = recommendation_code
