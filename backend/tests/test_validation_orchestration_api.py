@@ -195,36 +195,53 @@ def validation_test_setup(db: Session) -> dict[str, Any]:
         )
     db.flush()
 
-    # 5. Role Assignments
+    # 5. Role Assignments. The CI baseline is persistent across test functions,
+    # so keep this fixture idempotent instead of creating duplicate assignments.
     roles = {r.role_code: r for r in db.scalars(select(Role)).all()}
-    # Institution User
-    db.add(
-        UserRoleAssignment(
-            user_id=user_inst.user_id,
-            role_id=roles["INSTITUTION_USER"].role_id,
-            institution_id=inst.institution_id,
+
+    def ensure_role_assignment(
+        user: User,
+        role_code: str,
+        *,
+        institution_id=None,
+        review_team_id=None,
+    ) -> None:
+        role = roles[role_code]
+        existing_assignment = db.scalar(
+            select(UserRoleAssignment).where(
+                UserRoleAssignment.user_id == user.user_id,
+                UserRoleAssignment.role_id == role.role_id,
+                UserRoleAssignment.institution_id == institution_id,
+                UserRoleAssignment.review_team_id == review_team_id,
+                UserRoleAssignment.revoked_at.is_(None),
+            )
         )
+        if existing_assignment is None:
+            db.add(
+                UserRoleAssignment(
+                    user_id=user.user_id,
+                    role_id=role.role_id,
+                    institution_id=institution_id,
+                    review_team_id=review_team_id,
+                )
+            )
+
+    ensure_role_assignment(
+        user_inst,
+        "INSTITUTION_USER",
+        institution_id=inst.institution_id,
     )
-    # Authorized Auditor on Team
-    db.add(
-        UserRoleAssignment(
-            user_id=user_auditor.user_id,
-            role_id=roles["AUDITOR"].role_id,
-            review_team_id=team.review_team_id,
-        )
+    ensure_role_assignment(
+        user_auditor,
+        "AUDITOR",
+        review_team_id=team.review_team_id,
     )
-    # Other Auditor on Other Team
-    db.add(
-        UserRoleAssignment(
-            user_id=user_other_auditor.user_id,
-            role_id=roles["AUDITOR"].role_id,
-            review_team_id=other_team.review_team_id,
-        )
+    ensure_role_assignment(
+        user_other_auditor,
+        "AUDITOR",
+        review_team_id=other_team.review_team_id,
     )
-    # Admin (Global)
-    db.add(
-        UserRoleAssignment(user_id=user_admin.user_id, role_id=roles["ADMIN"].role_id)
-    )
+    ensure_role_assignment(user_admin, "ADMIN")
     db.flush()
 
     # 5. Application and Revision

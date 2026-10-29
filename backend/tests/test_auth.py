@@ -572,7 +572,7 @@ def test_health_and_root_endpoints_remain_functional(client):
     """Verify that root / and health /health endpoints remain fully operational."""
     root_resp = client.get("/")
     assert root_resp.status_code == 200
-    assert "AIC-Verify API is running" in root_resp.json()["message"]
+    assert "AIC-Flow API is running" in root_resp.json()["message"]
 
     health_resp = client.get("/health")
     assert health_resp.status_code == 200

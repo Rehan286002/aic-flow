@@ -239,7 +239,7 @@ def test_create_application_draft_and_lifecycle(
     # Check status history
     assert len(data["status_history"]) == 1
     assert data["status_history"][0]["to_status"] == "DRAFT"
-    assert "Initial Extension of Approval" in data["status_history"][0]["change_reason"]
+    assert "Initial approval application draft created." in data["status_history"][0]["change_reason"]
 
     # Check all 7 requirements
     assert len(data["requirements"]) == 7

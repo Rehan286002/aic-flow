@@ -74,20 +74,20 @@ def auth_headers(db_session):
 
 
 def test_database_uniqueness_constraint_exists(db_session):
-    """Verify that uq_applications_institution_ay_family exists in PostgreSQL pg_constraint."""
+    """Verify that the current four-column application uniqueness constraint exists in PostgreSQL."""
     stmt = text("""
         SELECT conname, contype, pg_get_constraintdef(c.oid)
         FROM pg_constraint c
         JOIN pg_class t ON c.conrelid = t.oid
         WHERE t.relname = 'applications'
-          AND c.conname = 'uq_applications_institution_ay_family';
+          AND c.conname = 'uq_applications_institution_ay_family_process';
     """)
     result = db_session.execute(stmt).fetchone()
     assert result is not None, (
-        "Constraint uq_applications_institution_ay_family not found in PostgreSQL"
+        "Constraint uq_applications_institution_ay_family_process not found in PostgreSQL"
     )
     assert result[1] == "u", "Constraint is not a UNIQUE constraint"
-    assert "UNIQUE (institution_id, academic_year, application_family)" in result[2]
+    assert "UNIQUE (institution_id, academic_year, application_family, process_type)" in result[2]
 
 
 def test_sequential_duplicate_creation_returns_409(client, auth_headers):
@@ -127,7 +127,7 @@ def test_database_rejects_duplicate_when_precheck_bypassed(db_session, auth_head
     with pytest.raises(IntegrityError) as exc_info:
         db_session.flush()
 
-    assert "uq_applications_institution_ay_family" in str(exc_info.value).lower()
+    assert "uq_applications_institution_ay_family_process" in str(exc_info.value).lower()
     db_session.rollback()
 
 
