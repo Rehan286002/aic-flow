@@ -69,11 +69,42 @@ export interface EVCVisit {
   updated_at: string;
 }
 
+export interface SHCProceeding {
+  shc_proceeding_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  status: 'PREPARATION' | 'SCHEDULED' | 'HEARING_RECORDED' | 'RECOMMENDATION_RECORDED';
+  notice_reference: string | null;
+  hearing_mode: 'ONLINE' | 'IN_PERSON' | null;
+  hearing_scheduled_at: string | null;
+  hearing_details: string | null;
+  official_schedule_reference: string | null;
+  schedule_revision: number;
+  institution_submission_reference: string | null;
+  representative_one_name: string | null;
+  representative_one_designation: string | null;
+  representative_two_name: string | null;
+  representative_two_designation: string | null;
+  hearing_summary: string | null;
+  hearing_recorded_by: string | null;
+  hearing_recorded_at: string | null;
+  recommendation_code: 'COMPLIANCE_REVIEWED' | 'FURTHER_COMPLIANCE_REQUIRED' | 'DEFICIENCIES_REMAIN' | 'INCONCLUSIVE' | null;
+  recommendation_text: string | null;
+  recommendation_reference: string | null;
+  recommendation_recorded_by: string | null;
+  recommendation_recorded_at: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkflowDetail extends WorkflowCase {
   requirements: ApplicationRequirementItem[];
   events: WorkflowEvent[];
   obligations: ComplianceObligation[];
   evc_visit: EVCVisit | null;
+  shc_proceeding: SHCProceeding | null;
 }
 
 export interface WorkflowNotification {
@@ -98,6 +129,36 @@ export const workflowApi = {
     request<WorkflowDetail>(`/api/v1/workflow/cases/${id}/assign`, {
       method: 'POST', body: JSON.stringify({ review_team_id, assigned_role_code: 'INTAKE_OFFICER', note }),
     }, true),
+  scheduleShcHearing: (caseId: string, payload: {
+    hearing_mode: 'ONLINE' | 'IN_PERSON';
+    hearing_scheduled_at: string;
+    hearing_details: string;
+    notice_reference?: string | null;
+    official_schedule_reference?: string | null;
+  }) => request<SHCProceeding>(`/api/v1/workflow/cases/${caseId}/shc-proceeding/schedule`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  submitShcCompliance: (proceedingId: string, payload: { submission_reference: string; note: string }) =>
+    request<SHCProceeding>(`/api/v1/workflow/shc-proceedings/${proceedingId}/compliance-submission`, {
+      method: 'POST', body: JSON.stringify(payload),
+    }, true),
+  recordShcHearing: (proceedingId: string, payload: {
+    representative_one_name: string;
+    representative_one_designation: string;
+    representative_two_name: string;
+    representative_two_designation: string;
+    hearing_summary: string;
+    note: string;
+  }) => request<SHCProceeding>(`/api/v1/workflow/shc-proceedings/${proceedingId}/hearing`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordShcRecommendation: (proceedingId: string, payload: {
+    recommendation_code: 'COMPLIANCE_REVIEWED' | 'FURTHER_COMPLIANCE_REQUIRED' | 'DEFICIENCIES_REMAIN' | 'INCONCLUSIVE';
+    recommendation_text: string;
+    recommendation_reference?: string | null;
+  }) => request<SHCProceeding>(`/api/v1/workflow/shc-proceedings/${proceedingId}/recommendation`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
   scheduleEvcVisit: (caseId: string, payload: {
     visit_mode: 'ONLINE' | 'OFFLINE';
     scheduled_start_at: string;
