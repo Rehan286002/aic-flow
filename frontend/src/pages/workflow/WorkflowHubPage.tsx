@@ -68,7 +68,10 @@ export default function WorkflowHubPage() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (role === 'ADMIN' || role === 'REGULATORY_POLICY_PUBLISHER') return;
+    void refresh();
+  }, [refresh, role]);
 
   const openCase = useCallback(async (row: WorkflowCase) => {
     try { setSelected(await workflowApi.detail(row.workflow_case_id)); }
@@ -281,8 +284,8 @@ export default function WorkflowHubPage() {
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Case dossier</div><h2 className="mt-1 text-lg font-bold text-slate-900">{selected.application_number}</h2><p className="text-sm text-slate-600">{selected.institution_name} · {selected.process_type}</p></div><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{stageLabel(selected.current_stage)}</span></div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Route</span><div className="mt-0.5 font-semibold text-slate-800">{selected.route_code}</div></div><div className="rounded-lg bg-slate-50 p-2"><span className="text-slate-500">Regulatory baseline</span><div className="mt-0.5 font-semibold text-slate-800">{selected.regulatory_version}</div></div></div>
-              {selected.route_snapshot.route_status === 'MANUAL_CONFIRMATION_REQUIRED' && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">This application category has no approved route profile in the current configuration. It cannot proceed until the applicable route is confirmed by an authorised policy officer.</p>}
-              {selected.route_snapshot.requires_committee == null && selected.route_snapshot.requires_evc === true && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">EVC completion is recorded here. The applicable Standing Hearing Committee (SHC) route is determined by the effective category-specific regulatory route.</p>}
+              {selected.route_snapshot.route_status === 'MANUAL_CONFIRMATION_REQUIRED' && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">Route confirmation is required: an authorised policy officer must record the applicable category-specific route before this case can progress.</p>}
+              {selected.route_snapshot.requires_committee == null && selected.route_snapshot.requires_evc === true && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">EVC completion is recorded here. The approved category-specific route determines whether the Standing Hearing Committee (SHC) stage follows.</p>}
               {role === 'INTAKE_OFFICER' && selected.current_stage === 'SUBMITTED' && selected.assigned_role_code === 'INTAKE_OFFICER' && !selected.assigned_user_id && teamId && <button onClick={() => void assignCase()} disabled={busy} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Assign to my review team</button>}
               <div className="mt-4 space-y-2"><label className="text-xs font-semibold text-slate-700">Action reason / case note</label><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Record the reason, instruction or review note..." className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"/>
                 <div className="flex flex-wrap gap-2">{nextStages.map((stage) => <button key={stage} onClick={() => void transition(stage)} disabled={busy} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{stageLabel(stage)}</button>)}</div>
