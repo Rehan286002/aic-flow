@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bell, Clock3, FileText, RefreshCw, Search, ShieldCheck, Workflow } from 'lucide-react';
+import { Bell, CalendarClock, Clock3, FileCheck, FileText, MapPin, RefreshCw, Search, ShieldCheck, Video, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { workflowApi, type WorkflowCase, type WorkflowDetail, type WorkflowNotification } from '@/features/workflow/api';
@@ -11,6 +11,7 @@ import type { DocumentUploadResponse } from '@/types/document';
 
 const stageLabel = (value: string) => value === 'COMMITTEE_PROCEEDINGS' ? 'Standing Hearing Committee (SHC)' : value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleDateString() : 'Not set';
+const dateTimeLabel = (value: string | null) => value ? new Date(value).toLocaleString() : 'Not set';
 const stageAgeDays = (value: string) => Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
 const ageLabel = (value: string) => {
   const days = stageAgeDays(value);
@@ -51,6 +52,19 @@ export default function WorkflowHubPage() {
   const [conditionSource, setConditionSource] = useState('');
   const [conditionDue, setConditionDue] = useState('');
   const [evidenceReference, setEvidenceReference] = useState('');
+  const [evcMode, setEvcMode] = useState<'ONLINE' | 'OFFLINE'>('ONLINE');
+  const [evcStartAt, setEvcStartAt] = useState('');
+  const [evcEndAt, setEvcEndAt] = useState('');
+  const [evcVenue, setEvcVenue] = useState('');
+  const [evcOfficialReference, setEvcOfficialReference] = useState('');
+  const [evcContactName, setEvcContactName] = useState('');
+  const [evcContactEmail, setEvcContactEmail] = useState('');
+  const [evcCoordinationNote, setEvcCoordinationNote] = useState('');
+  const [evcReportReference, setEvcReportReference] = useState('');
+  const [evcReportSummary, setEvcReportSummary] = useState('');
+  const [evcReportOutcome, setEvcReportOutcome] = useState<'COMPLIANT' | 'DEFICIENCIES_OBSERVED' | 'FOLLOW_UP_REQUIRED' | 'INCONCLUSIVE'>('INCONCLUSIVE');
+  const [evcReportNote, setEvcReportNote] = useState('');
+  const [evcCancelReason, setEvcCancelReason] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -133,11 +147,11 @@ export default function WorkflowHubPage() {
       if (stage === 'SCRUTINY') return ['CLARIFICATION_REQUESTED', requiresEvc ? 'EVC_COORDINATION' : 'AWAITING_AUTHORITY'];
     }
     if (['EVC_COORDINATOR', 'REGIONAL_OFFICER', 'LEAD_AUDITOR'].includes(role)) {
-      if (stage === 'EVC_COORDINATION') return ['EVC_SCHEDULED'];
-      if (stage === 'EVC_SCHEDULED') return ['EVC_COMPLETED'];
+      if (stage === 'EVC_COORDINATION') return selected.evc_visit?.status === 'SCHEDULED' ? ['EVC_SCHEDULED'] : [];
+      if (stage === 'EVC_SCHEDULED') return selected.evc_visit?.status === 'COMPLETED' ? ['EVC_COMPLETED'] : [];
       if (stage === 'EVC_COMPLETED' && requiresCommittee === false) return ['AWAITING_AUTHORITY'];
     }
-    if (role === 'EVC_MEMBER' && stage === 'EVC_SCHEDULED') return ['EVC_COMPLETED'];
+    if (role === 'EVC_MEMBER' && stage === 'EVC_SCHEDULED' && selected.evc_visit?.status === 'COMPLETED') return ['EVC_COMPLETED'];
     if (role === 'COMMITTEE_SECRETARIAT') {
       if (stage === 'EVC_COMPLETED' && requiresCommittee) return ['COMMITTEE_PROCEEDINGS'];
       if (stage === 'COMMITTEE_PROCEEDINGS') return ['AWAITING_AUTHORITY'];
