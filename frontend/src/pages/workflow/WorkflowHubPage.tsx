@@ -81,6 +81,11 @@ export default function WorkflowHubPage() {
   const [shcRecommendationCode, setShcRecommendationCode] = useState<'COMPLIANCE_REVIEWED' | 'FURTHER_COMPLIANCE_REQUIRED' | 'DEFICIENCIES_REMAIN' | 'INCONCLUSIVE'>('INCONCLUSIVE');
   const [shcRecommendationText, setShcRecommendationText] = useState('');
   const [shcRecommendationReference, setShcRecommendationReference] = useState('');
+  const [ecOutcome, setEcOutcome] = useState<'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'REJECTED'>('APPROVED_WITH_CONDITIONS');
+  const [ecDecisionReference, setEcDecisionReference] = useState('');
+  const [ecDecisionReasons, setEcDecisionReasons] = useState('');
+  const [ecSpeakingOrderReference, setEcSpeakingOrderReference] = useState('');
+  const [ecSpeakingOrderUploadedAt, setEcSpeakingOrderUploadedAt] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -380,6 +385,35 @@ export default function WorkflowHubPage() {
       toast.success('SHC recommendation recorded for Executive Committee consideration.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not record the SHC recommendation.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordExecutiveDecision = async () => {
+    if (!selected || ecDecisionReference.trim().length < 2 || ecDecisionReasons.trim().length < 15 || ecSpeakingOrderReference.trim().length < 2 || !ecSpeakingOrderUploadedAt) {
+      toast.error('Complete the Executive Committee decision, reasons and Speaking Order details.');
+      return;
+    }
+    const uploadedAt = new Date(ecSpeakingOrderUploadedAt);
+    if (Number.isNaN(uploadedAt.getTime()) || uploadedAt > new Date()) {
+      toast.error('Enter a valid Speaking Order upload time that is not in the future.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await workflowApi.recordExecutiveCommitteeDecision(selected.workflow_case_id, {
+        outcome_code: ecOutcome,
+        decision_reference: ecDecisionReference.trim(),
+        decision_reasons: ecDecisionReasons.trim(),
+        speaking_order_reference: ecSpeakingOrderReference.trim(),
+        speaking_order_uploaded_at: uploadedAt.toISOString(),
+      });
+      setSelected(updated);
+      await refresh();
+      toast.success('Executive Committee decision recorded with its Speaking Order reference.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the Executive Committee decision.');
     } finally {
       setBusy(false);
     }
