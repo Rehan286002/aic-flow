@@ -64,11 +64,11 @@ export default function InstitutionApplicationsPage() {
               variant="outline"
               className="text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-200"
             >
-              AICTE ID: 1-10948201
+              Authorised institution account
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Apex Institute of Technology, Pune • Academic Year 2026–27 Self-Disclosure Portfolio
+            Applications linked to your authorised institution • Academic Year 2026–27
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export default function InstitutionApplicationsPage() {
             disabled={loading || hasExistingApplication}
             title={
               hasExistingApplication
-                ? 'Only one Extension of Approval application per academic year is supported in this prototype'
+                ? 'An application for this category and academic year is already registered'
                 : 'Create new application draft'
             }
             className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs disabled:opacity-50"
@@ -178,8 +178,7 @@ export default function InstitutionApplicationsPage() {
                   No Applications Initiated
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Apex Institute of Technology does not currently have an active self-disclosure
-                  filing for Academic Year 2026–27. Initiate a new Extension of Approval (EoA)
+                  No self-disclosure filing is currently available for this institution for Academic Year 2026–27. Initiate a new Extension of Approval (EoA)
                   application to configure required Annexure 2.1 evidence checklists.
                 </p>
               </div>
