@@ -48,4 +48,4 @@ For `APP_ENV=production`, the utility requires both `--confirm-production` and t
 
 ## Checklist prerequisites
 
-Before the first institution application can be created, seed the standard EoA checklist/reference catalogue. In local development run `uv run python scripts/seed_checklist.py` from `backend/`. In production, follow the separately gated process in `docs/DEPLOYMENT.md` only after reviewing the applicable AICTE handbook and effective amendments. Do not run demo-account or synthetic-source seed scripts in production.
+Before the first institution application can be created, seed the standard EoA checklist/reference catalogue. In local development run `uv run python scripts/seed_checklist.py` from `backend/`. In production, follow the separately gated process in `docs/DEPLOYMENT.md` only after reviewing the applicable AICTE handbook and effective amendments. Do not run local-account or non-production reference-data seed scripts in production.
