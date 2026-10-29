@@ -7,7 +7,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 
 const PATH_TITLES: Record<string, string> = {
   institution: 'Institution Portal',
