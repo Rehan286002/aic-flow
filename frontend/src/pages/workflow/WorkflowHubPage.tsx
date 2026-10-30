@@ -3,11 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { Bell, CalendarClock, Clock3, FileCheck, FileText, Gavel, MapPin, RefreshCw, Search, ShieldCheck, Video, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { workflowApi, type WorkflowCase, type WorkflowDetail, type WorkflowNotification, type WorkflowReminderPolicy } from '@/features/workflow/api';
+import { workflowApi, type WorkflowCase, type WorkflowDetail, type WorkflowNotification, type WorkflowReminderPolicy, type DocumentValidityRecord } from '@/features/workflow/api';
 import { DocumentUploadModal } from '@/components/documents/DocumentUploadModal';
 import { documentsApi } from '@/features/documents/api';
 import type { ApplicationRequirementItem } from '@/types/application';
-import type { DocumentUploadResponse } from '@/types/document';
+import type { DocumentHistoryResponse, DocumentUploadResponse } from '@/types/document';
 
 const stageLabel = (value: string) => value === 'COMMITTEE_PROCEEDINGS' ? 'Standing Hearing Committee (SHC)' : value === 'AWAITING_AUTHORITY' ? 'Executive Committee Decision' : value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleDateString() : 'Not set';
@@ -119,6 +119,19 @@ export default function WorkflowHubPage() {
   const [uploadObligationId, setUploadObligationId] = useState<string | null>(null);
   const [obligationEvidenceRequirementIds, setObligationEvidenceRequirementIds] = useState<Record<string, string>>({});
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [validityRequirementId, setValidityRequirementId] = useState('');
+  const [validityHistory, setValidityHistory] = useState<DocumentHistoryResponse | null>(null);
+  const [validityHistoryLoading, setValidityHistoryLoading] = useState(false);
+  const [validityDocumentVersionId, setValidityDocumentVersionId] = useState('');
+  const [validityType, setValidityType] = useState<DocumentValidityRecord['validity_type']>('ISSUER_DATED_DOCUMENT');
+  const [validityIssueDate, setValidityIssueDate] = useState('');
+  const [validityFrom, setValidityFrom] = useState('');
+  const [validityUntil, setValidityUntil] = useState('');
+  const [leaseStartDate, setLeaseStartDate] = useState('');
+  const [leaseEndDate, setLeaseEndDate] = useState('');
+  const [maximumCourseDurationYears, setMaximumCourseDurationYears] = useState('4');
+  const [validityBasisReference, setValidityBasisReference] = useState('');
+  const [validityReviewNotes, setValidityReviewNotes] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -154,6 +167,31 @@ export default function WorkflowHubPage() {
       .finally(() => { if (active) setReminderPoliciesLoading(false); });
     return () => { active = false; };
   }, [role]);
+
+  useEffect(() => {
+    if (!validityRequirementId) {
+      setValidityHistory(null);
+      setValidityDocumentVersionId('');
+      return;
+    }
+    let active = true;
+    setValidityHistoryLoading(true);
+    documentsApi.getHistory(validityRequirementId)
+      .then((history) => {
+        if (!active) return;
+        setValidityHistory(history);
+        const cleanVersion = history.versions.find((version) => version.is_clean);
+        setValidityDocumentVersionId(cleanVersion?.document_version_id || '');
+      })
+      .catch((err) => {
+        if (active) {
+          setValidityHistory(null);
+          toast.error(err instanceof Error ? err.message : 'Could not load uploaded document versions.');
+        }
+      })
+      .finally(() => { if (active) setValidityHistoryLoading(false); });
+    return () => { active = false; };
+  }, [validityRequirementId]);
 
   useEffect(() => {
     const applicationId = searchParams.get('application');
@@ -613,6 +651,69 @@ export default function WorkflowHubPage() {
       toast.success('Council appeal decision recorded.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not record the Council appeal decision.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitDocumentValidity = async () => {
+    if (!selected || !validityRequirementId || !validityDocumentVersionId || validityBasisReference.trim().length < 5) {
+      toast.error('Choose an uploaded clean document and enter its validity source.');
+      return;
+    }
+    if (['STRUCTURAL_STABILITY_CERTIFICATE','BUILDING_COMPLETION_CERTIFICATE','FIRE_SAFETY_CERTIFICATE','ISSUER_DATED_DOCUMENT'].includes(validityType) && !validityIssueDate) {
+      toast.error('Enter the document issue date.');
+      return;
+    }
+    if (['FIRE_SAFETY_CERTIFICATE','ISSUER_DATED_DOCUMENT'].includes(validityType) && !validityUntil) {
+      toast.error('Enter the expiry date specified by the issuing authority.');
+      return;
+    }
+    if (validityType === 'LEASE_DEED' && (!leaseStartDate || !leaseEndDate || !maximumCourseDurationYears)) {
+      toast.error('Enter the lease period and longest programme duration.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.submitDocumentValidity(selected.workflow_case_id, {
+        application_requirement_id: validityRequirementId,
+        document_version_id: validityDocumentVersionId,
+        validity_type: validityType,
+        issue_date: validityIssueDate || null,
+        valid_from: validityFrom || null,
+        valid_until: validityUntil || null,
+        lease_start_date: leaseStartDate || null,
+        lease_end_date: leaseEndDate || null,
+        maximum_course_duration_years: validityType === 'LEASE_DEED' ? Number(maximumCourseDurationYears) : null,
+        validity_basis_reference: validityBasisReference.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setValidityBasisReference('');
+      setValidityUntil('');
+      await refresh();
+      toast.success('Document validity details submitted for officer review.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not submit document validity details.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reviewDocumentValidity = async (recordId: string, action: 'VERIFY' | 'RETURN') => {
+    const noteText = (validityReviewNotes[recordId] || '').trim();
+    if (!selected || noteText.length < 8) {
+      toast.error('Enter a review note of at least eight characters.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.reviewDocumentValidity(recordId, action, noteText);
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setValidityReviewNotes((items) => ({ ...items, [recordId]: '' }));
+      await refresh();
+      toast.success(action === 'VERIFY' ? 'Document validity verified.' : 'Document validity returned for correction.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update document validity.');
     } finally {
       setBusy(false);
     }
