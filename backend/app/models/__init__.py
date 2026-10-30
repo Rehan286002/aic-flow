@@ -46,6 +46,7 @@ from app.models.digital_signature_check import DigitalSignatureCheck
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.compliance_obligation import ComplianceObligation
+from app.models.document_validity_record import DocumentValidityRecord
 from app.models.in_app_notification import InAppNotification
 
 # Validation engine and evidence intelligence
@@ -101,6 +102,7 @@ __all__ = [
     "WorkflowCase",
     "WorkflowEvent",
     "ComplianceObligation",
+    "DocumentValidityRecord",
     "InAppNotification",
     # Validation engine and evidence intelligence
     "ValidationRun",

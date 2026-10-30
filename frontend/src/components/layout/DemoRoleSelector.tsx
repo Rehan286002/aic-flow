@@ -26,12 +26,16 @@ import {
   UserCog,
   Info,
   Lock,
+  CalendarDays,
+  Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ROLE_ICONS: Record<Role, React.ComponentType<{ className?: string }>> = {
   institution: Building2,
   auditor: UserCheck,
+  regional: CalendarDays,
+  committee: Landmark,
   lead: ShieldAlert,
   admin: UserCog,
 };
@@ -78,7 +82,10 @@ export function DemoRoleSelector() {
       auth.switchContext(target);
       const ws = roleCodeToWorkspace(target.role_code);
       if (ws && ROLES[ws]) {
-        navigate(ROLES[ws].defaultPath);
+        const destination = target.role_code === 'REGULATORY_POLICY_PUBLISHER'
+          ? '/admin/policy/route-simulator'
+          : ROLES[ws].defaultPath;
+        navigate(destination);
         toast.info(`Switched Scope: ${formatRoleContextLabel(target)}`, {
           description: ROLES[ws].label,
         });

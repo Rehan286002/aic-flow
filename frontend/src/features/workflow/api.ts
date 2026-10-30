@@ -33,6 +33,8 @@ export interface WorkflowEvent {
 
 export interface ComplianceObligation {
   obligation_id: string;
+  workflow_case_id: string;
+  application_id: string;
   title: string;
   description: string;
   source_condition: string;
@@ -60,6 +62,29 @@ export interface WorkflowNotification {
   created_at: string;
 }
 
+
+export interface DocumentValidityRecord {
+  document_validity_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  institution_id: string;
+  document_id: string;
+  document_version_id: string;
+  document_type: string;
+  issuer: string;
+  valid_from: string | null;
+  valid_until: string;
+  document_reference: string;
+  verification_status: string;
+  verification_note: string | null;
+  replacement_of_id: string | null;
+  created_by: string;
+  verified_by: string | null;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const workflowApi = {
   cases: () => request<WorkflowCase[]>('/api/v1/workflow/cases'),
   detail: (id: string) => request<WorkflowDetail>(`/api/v1/workflow/cases/${id}`),
@@ -71,17 +96,34 @@ export const workflowApi = {
     request<WorkflowDetail>(`/api/v1/workflow/cases/${id}/assign`, {
       method: 'POST', body: JSON.stringify({ review_team_id, assigned_role_code: 'INTAKE_OFFICER', note }),
     }, true),
-  event: (id: string, event_type: string, summary: string) =>
+  event: (id: string, event_type: string, summary: string, event_payload: Record<string, unknown> = {}) =>
     request<WorkflowEvent>(`/api/v1/workflow/cases/${id}/events`, {
-      method: 'POST', body: JSON.stringify({ event_type, summary, event_payload: {} }),
+      method: 'POST', body: JSON.stringify({ event_type, summary, event_payload }),
     }, true),
   createObligation: (id: string, payload: { title: string; description: string; source_condition: string; due_at: string }) =>
     request<ComplianceObligation>(`/api/v1/workflow/cases/${id}/obligations`, {
       method: 'POST', body: JSON.stringify(payload),
     }, true),
-  obligationAction: (id: string, action: string, note: string, evidence_reference?: string) =>
+  obligationAction: (id: string, action: string, note: string, evidence_reference?: string, evidence_document_id?: string) =>
     request<ComplianceObligation>(`/api/v1/workflow/obligations/${id}`, {
-      method: 'PATCH', body: JSON.stringify({ action, note, evidence_reference }),
+      method: 'PATCH', body: JSON.stringify({ action, note, evidence_reference, evidence_document_id }),
+    }, true),
+  obligations: () => request<ComplianceObligation[]>('/api/v1/workflow/obligations'),
+  documentValidity: () => request<DocumentValidityRecord[]>('/api/v1/document-validity'),
+  createDocumentValidity: (caseId: string, payload: {
+    document_id: string;
+    document_version_id: string;
+    document_type: string;
+    issuer: string;
+    valid_from: string | null;
+    valid_until: string;
+    document_reference: string;
+  }) => request<DocumentValidityRecord>(`/api/v1/document-validity/cases/${caseId}`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  reviewDocumentValidity: (id: string, action: 'VERIFY' | 'RETURN', note: string) =>
+    request<DocumentValidityRecord>(`/api/v1/document-validity/${id}`, {
+      method: 'PATCH', body: JSON.stringify({ action, note }),
     }, true),
   notifications: () => request<WorkflowNotification[]>('/api/v1/workflow/notifications'),
   markRead: (id: string) => request<WorkflowNotification>(`/api/v1/workflow/notifications/${id}/read`, { method: 'PATCH' }, true),

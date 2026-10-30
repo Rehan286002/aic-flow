@@ -111,13 +111,38 @@ def list_workflow_cases(
         team_scope = Application.review_team_id == context.review_team_id
         is_supervisor = context.role_code in {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}
         if not is_supervisor:
+            if context.role_code == "AUDITOR":
+                stage_role_scope = WorkflowCase.assigned_role_code.in_(["INTAKE_OFFICER", "SCRUTINY_OFFICER"])
+            elif context.role_code == "COMMITTEE_SECRETARIAT":
+                stage_role_scope = or_(
+                    WorkflowCase.assigned_role_code == context.role_code,
+                    and_(
+                        WorkflowCase.current_stage == "EVC_COMPLETED",
+                        WorkflowCase.route_snapshot["requires_committee"].astext == "true",
+                    ),
+                )
+            elif context.role_code == "EVC_COORDINATOR":
+                stage_role_scope = or_(
+                    WorkflowCase.assigned_role_code == context.role_code,
+                    and_(
+                        WorkflowCase.current_stage == "EVC_COMPLETED",
+                        WorkflowCase.route_snapshot["requires_committee"].astext == "false",
+                    ),
+                )
+            else:
+                stage_role_scope = WorkflowCase.assigned_role_code == context.role_code
             team_scope = and_(
                 team_scope,
+                stage_role_scope,
                 or_(WorkflowCase.assigned_user_id.is_(None), WorkflowCase.assigned_user_id == current_user.user_id),
             )
         scope_clauses.append(team_scope)
     if can_view_unassigned_intake:
-        scope_clauses.append(and_(Application.review_team_id.is_(None), or_(WorkflowCase.assigned_user_id.is_(None), WorkflowCase.assigned_user_id == current_user.user_id)))
+        scope_clauses.append(and_(
+            Application.review_team_id.is_(None),
+            WorkflowCase.assigned_role_code == "INTAKE_OFFICER",
+            or_(WorkflowCase.assigned_user_id.is_(None), WorkflowCase.assigned_user_id == current_user.user_id),
+        ))
     stmt = stmt.where(or_(*scope_clauses)).order_by(WorkflowCase.updated_at.desc())
     rows = db.execute(stmt).all()
     return [_to_list_item(db, case, application) for case, application in rows]
@@ -232,6 +257,21 @@ def transition_workflow_case(
         ).limit(1))
         if open_obligations is not None:
             raise HTTPException(status_code=409, detail="All approval conditions must be verified and closed before the case can close.")
+    if payload.to_stage in {"APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED", "ON_HOLD"}:
+        decision_event = db.scalar(
+            select(WorkflowEvent)
+            .where(
+                WorkflowEvent.workflow_case_id == case.workflow_case_id,
+                WorkflowEvent.event_type == "DECISION_RECORDED",
+            )
+            .order_by(WorkflowEvent.occurred_at.desc())
+            .limit(1)
+        )
+        if decision_event is None or (decision_event.event_payload or {}).get("outcome") != payload.to_stage:
+            raise HTTPException(
+                status_code=409,
+                detail="Record the matching authorised decision, official order reference and date before changing the statutory outcome.",
+            )
     transition_case(
         db,
         case,
@@ -267,6 +307,18 @@ def create_case_event(
         ).limit(1))
         if convened_event is None:
             raise HTTPException(status_code=409, detail="Record that the committee convened before recording its minutes.")
+    if payload.event_type == "DECISION_RECORDED":
+        decision = payload.event_payload
+        if decision.get("outcome") not in {"APPROVED", "APPROVED_WITH_CONDITIONS", "REJECTED", "ON_HOLD"}:
+            raise HTTPException(status_code=422, detail="A valid competent-authority outcome is required.")
+        if not str(decision.get("official_order_reference", "")).strip() or not str(decision.get("decision_date", "")).strip():
+            raise HTTPException(status_code=422, detail="The official order reference and decision date are required.")
+    if payload.event_type in {"DOCUMENT_VALIDITY_RECORDED", "DOCUMENT_RENEWAL_SUBMITTED", "DOCUMENT_VALIDITY_CONFIRMED"}:
+        document_data = payload.event_payload
+        if not str(document_data.get("document_reference", "")).strip() or not str(document_data.get("valid_until", "")).strip():
+            raise HTTPException(status_code=422, detail="A supporting document reference and valid-until date are required.")
+        if not str(document_data.get("document_type", "")).strip():
+            raise HTTPException(status_code=422, detail="A document type is required.")
     event = add_workflow_event(
         db,
         case,
@@ -418,8 +470,14 @@ def list_obligations(
         team_scope = Application.review_team_id == context.review_team_id
         is_supervisor = context.role_code in {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}
         if not is_supervisor:
+            role_match = (
+                WorkflowCase.assigned_role_code.in_(["INTAKE_OFFICER", "SCRUTINY_OFFICER"])
+                if context.role_code == "AUDITOR"
+                else WorkflowCase.assigned_role_code == context.role_code
+            )
             team_scope = and_(
                 team_scope,
+                role_match,
                 or_(WorkflowCase.assigned_user_id.is_(None), WorkflowCase.assigned_user_id == current_user.user_id),
             )
         scope.append(team_scope)

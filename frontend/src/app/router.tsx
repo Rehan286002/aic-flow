@@ -7,7 +7,6 @@ import { AuditorQueuePage } from '@/pages/auditor/AuditorQueuePage';
 import { AuditorCaseWorkspacePage } from '@/pages/auditor/AuditorCaseWorkspacePage';
 import { AuditorEvidenceExplorerPage } from '@/pages/auditor/AuditorEvidenceExplorerPage';
 import { AuditorFindingReviewPage } from '@/pages/auditor/AuditorFindingReviewPage';
-import InstitutionOverviewPage from '@/pages/institution/InstitutionOverviewPage';
 import InstitutionApplicationsPage from '@/pages/institution/InstitutionApplicationsPage';
 import NewApplicationPage from '@/pages/institution/NewApplicationPage';
 import { InstitutionDocumentsPage } from '@/pages/institution/InstitutionDocumentsPage';
@@ -22,7 +21,6 @@ import { LeadTemporalReplayPage } from '@/pages/lead/LeadTemporalReplayPage';
 import { LeadAuditHistoryPage } from '@/pages/lead/LeadAuditHistoryPage';
 import { AuditorAssistPage } from '@/pages/auditor/AuditorAssistPage';
 import { InstitutionAssistPage } from '@/pages/institution/InstitutionAssistPage';
-import AdminOverviewPage from '@/pages/admin/AdminOverviewPage';
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage';
 import { AdminTeamsPage } from '@/pages/admin/AdminTeamsPage';
 import { AdminRulesPage } from '@/pages/admin/AdminRulesPage';
@@ -31,8 +29,9 @@ import { AdminHealthPage } from '@/pages/admin/AdminHealthPage';
 import { AdminLogsPage } from '@/pages/admin/AdminLogsPage';
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
 import NotFoundPage from '@/pages/common/NotFoundPage';
-import { IndexRedirect } from '@/components/auth/IndexRedirect';
+import { AdminIndexRedirect, IndexRedirect } from '@/components/auth/IndexRedirect';
 import WorkflowHubPage from '@/pages/workflow/WorkflowHubPage';
+import RoleWorkspacePage from '@/pages/workflow/RoleWorkspacePage';
 
 export const router = createBrowserRouter([
   {
@@ -110,7 +109,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'overview',
-            element: <InstitutionOverviewPage />,
+            element: <RoleWorkspacePage workspace="institution" section="overview" />,
           },
           {
             path: 'applications',
@@ -140,6 +139,46 @@ export const router = createBrowserRouter([
             path: 'assist',
             element: <InstitutionAssistPage />,
           },
+          { path: 'obligations', element: <RoleWorkspacePage workspace="institution" section="obligations" /> },
+          { path: 'renewals', element: <RoleWorkspacePage workspace="institution" section="renewals" /> },
+          { path: 'notifications', element: <RoleWorkspacePage workspace="institution" section="notifications" /> },
+        ],
+      },
+      // Processing Office: distinct Intake and Scrutiny permission packages
+      {
+        path: 'office',
+        element: <ProtectedRoute requiredWorkspace="auditor" />,
+        children: [
+          { index: true, element: <RoleWorkspacePage workspace="auditor" section="overview" /> },
+          { path: ':section', element: <RoleWorkspacePage workspace="auditor" /> },
+        ],
+      },
+      // Regional coordination: region scope remains a backend permission boundary
+      {
+        path: 'regional',
+        element: <ProtectedRoute requiredWorkspace="regional" />,
+        children: [
+          { index: true, element: <RoleWorkspacePage workspace="regional" section="overview" /> },
+          { path: ':section', element: <RoleWorkspacePage workspace="regional" /> },
+        ],
+      },
+      // Committee and EVC participant workspace
+      {
+        path: 'committee',
+        element: <ProtectedRoute requiredWorkspace="committee" />,
+        children: [
+          { index: true, element: <RoleWorkspacePage workspace="committee" section="overview" /> },
+          { path: ':section', element: <RoleWorkspacePage workspace="committee" /> },
+        ],
+      },
+      // Bureau and competent-authority workspace
+      {
+        path: 'bureau',
+        element: <ProtectedRoute requiredWorkspace="lead" />,
+        children: [
+          { index: true, element: <RoleWorkspacePage workspace="lead" section="overview" /> },
+          { path: 'decisions', element: <ProtectedRoute requiredRole="COMPETENT_AUTHORITY"><RoleWorkspacePage workspace="lead" section="decisions" /></ProtectedRoute> },
+          { path: ':section', element: <RoleWorkspacePage workspace="lead" /> },
         ],
       },
       // Lead Auditor Routes
@@ -184,44 +223,48 @@ export const router = createBrowserRouter([
       // Admin Routes
       {
         path: 'admin',
-        element: <ProtectedRoute requiredRole="ADMIN" />,
+        element: <ProtectedRoute requiredWorkspace="admin" />,
         children: [
           {
             index: true,
-            element: <Navigate to="/admin/overview" replace />,
+            element: <AdminIndexRedirect />,
           },
           {
             path: 'overview',
-            element: <AdminOverviewPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><RoleWorkspacePage workspace="admin" section="overview" /></ProtectedRoute>,
           },
           {
             path: 'users',
-            element: <AdminUsersPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminUsersPage /></ProtectedRoute>,
           },
           {
             path: 'teams',
-            element: <AdminTeamsPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminTeamsPage /></ProtectedRoute>,
           },
           {
             path: 'rules',
-            element: <AdminRulesPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminRulesPage /></ProtectedRoute>,
           },
           {
             path: 'connectors',
-            element: <AdminConnectorsPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminConnectorsPage /></ProtectedRoute>,
           },
           {
             path: 'health',
-            element: <AdminHealthPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminHealthPage /></ProtectedRoute>,
           },
           {
             path: 'logs',
-            element: <AdminLogsPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminLogsPage /></ProtectedRoute>,
           },
           {
             path: 'settings',
-            element: <AdminSettingsPage />,
+            element: <ProtectedRoute requiredRole="ADMIN"><AdminSettingsPage /></ProtectedRoute>,
           },
+          { path: 'policy/sources', element: <ProtectedRoute requiredRole="REGULATORY_POLICY_PUBLISHER"><RoleWorkspacePage workspace="admin" section="sources" /></ProtectedRoute> },
+          { path: 'policy/route-simulator', element: <ProtectedRoute requiredRole="REGULATORY_POLICY_PUBLISHER"><RoleWorkspacePage workspace="admin" section="route-simulator" /></ProtectedRoute> },
+          { path: 'policy/deadlines', element: <ProtectedRoute requiredRole="REGULATORY_POLICY_PUBLISHER"><RoleWorkspacePage workspace="admin" section="deadlines" /></ProtectedRoute> },
+          { path: 'policy/notifications', element: <ProtectedRoute requiredRole="REGULATORY_POLICY_PUBLISHER"><RoleWorkspacePage workspace="admin" section="notification-policies" /></ProtectedRoute> },
         ],
       },
       // Fallback

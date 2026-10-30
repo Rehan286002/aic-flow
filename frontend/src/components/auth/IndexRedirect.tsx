@@ -27,3 +27,14 @@ export function IndexRedirect() {
 
   return <Navigate to="/login" replace />;
 }
+
+
+export function AdminIndexRedirect() {
+  const auth = useAuth();
+  if (auth.status === 'loading') return null;
+  if (auth.status === 'unauthenticated' || !auth.user) return <Navigate to="/login" replace />;
+  const destination = auth.activeContext?.role_code === 'REGULATORY_POLICY_PUBLISHER'
+    ? '/admin/policy/route-simulator'
+    : '/admin/overview';
+  return <Navigate to={destination} replace />;
+}

@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useDemoRole } from '@/hooks/useDemoRole';
-import { ROLE_NAVIGATION } from '@/config/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { getRoleNavigation } from '@/config/navigation';
 import {
   Tooltip,
   TooltipContent,
@@ -21,7 +22,8 @@ interface SidebarProps {
 
 export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) {
   const { currentRole, currentRoleConfig, sidebarCollapsed, toggleSidebar } = useDemoRole();
-  const navItems = ROLE_NAVIGATION[currentRole] || [];
+  const auth = useAuth();
+  const navItems = getRoleNavigation(currentRole, auth.activeContext?.role_code);
 
   const isCollapsed = !isMobileSheet && sidebarCollapsed;
 

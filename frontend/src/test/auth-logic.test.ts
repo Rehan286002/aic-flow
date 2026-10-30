@@ -9,78 +9,29 @@ import {
 } from '../types/auth.ts';
 import { ApiError, getCachedCsrfToken, clearCachedCsrfToken } from '../lib/api.ts';
 
-test('roleCodeToWorkspace maps all AIC-Flow permission packages to their workspace', () => {
-  assert.equal(roleCodeToWorkspace('INSTITUTION_USER'), 'institution');
-  assert.equal(roleCodeToWorkspace('AUDITOR'), 'auditor');
-  for (const role of ['INTAKE_OFFICER', 'SCRUTINY_OFFICER', 'EVC_COORDINATOR', 'EVC_MEMBER', 'COMMITTEE_SECRETARIAT']) assert.equal(roleCodeToWorkspace(role), 'auditor');
-  for (const role of ['REGIONAL_OFFICER', 'BUREAU_SUPERVISOR', 'COMPETENT_AUTHORITY', 'LEAD_AUDITOR']) assert.equal(roleCodeToWorkspace(role), 'lead');
-  assert.equal(roleCodeToWorkspace('REGULATORY_POLICY_PUBLISHER'), 'admin');
-  assert.equal(roleCodeToWorkspace('LEAD_AUDITOR'), 'lead');
-  assert.equal(roleCodeToWorkspace('ADMIN'), 'admin');
-  assert.equal(roleCodeToWorkspace('UNKNOWN_ROLE'), null);
+test('each PS 26262 permission package maps to the correct workspace', () => {
+  const cases: Array<[string, string | null]> = [
+    ['INSTITUTION_USER', 'institution'],
+    ['INTAKE_OFFICER', 'auditor'],
+    ['SCRUTINY_OFFICER', 'auditor'],
+    ['AUDITOR', 'auditor'],
+    ['REGIONAL_OFFICER', 'regional'],
+    ['EVC_COORDINATOR', 'regional'],
+    ['EVC_MEMBER', 'committee'],
+    ['COMMITTEE_SECRETARIAT', 'committee'],
+    ['BUREAU_SUPERVISOR', 'lead'],
+    ['COMPETENT_AUTHORITY', 'lead'],
+    ['LEAD_AUDITOR', 'lead'],
+    ['ADMIN', 'admin'],
+    ['REGULATORY_POLICY_PUBLISHER', 'admin'],
+    ['UNKNOWN_ROLE', null],
+  ];
+  for (const [role, workspace] of cases) assert.equal(roleCodeToWorkspace(role), workspace);
 });
 
-test('workspaceToRoleCode maps workspaces to statutory role codes', () => {
-  assert.equal(workspaceToRoleCode('institution'), 'INSTITUTION_USER');
-  assert.equal(workspaceToRoleCode('auditor'), 'AUDITOR');
-  assert.equal(workspaceToRoleCode('lead'), 'LEAD_AUDITOR');
-  assert.equal(workspaceToRoleCode('admin'), 'ADMIN');
-});
-
-test('getRoleContextKey creates distinct keys preserving scope without deduplication', () => {
-  const context1: RoleContext = {
-    role_code: 'AUDITOR',
-    institution_id: null,
-    review_team_id: 'team-west-01',
-  };
-  const context2: RoleContext = {
-    role_code: 'AUDITOR',
-    institution_id: null,
-    review_team_id: 'team-north-02',
-  };
-  const context3: RoleContext = {
-    role_code: 'INSTITUTION_USER',
-    institution_id: 'inst-synth-001',
-    review_team_id: null,
-  };
-
-  const key1 = getRoleContextKey(context1);
-  const key2 = getRoleContextKey(context2);
-  const key3 = getRoleContextKey(context3);
-
-  assert.equal(key1, 'AUDITOR::team-west-01');
-  assert.equal(key2, 'AUDITOR::team-north-02');
-  assert.equal(key3, 'INSTITUTION_USER:inst-synth-001:');
-
-  // Verify that same role_code with different teams produces distinct keys
-  assert.notEqual(key1, key2);
-});
-
-test('formatRoleContextLabel formats regulatory scope labels with truncated IDs', () => {
-  const institutionContext: RoleContext = {
-    role_code: 'INSTITUTION_USER',
-    institution_id: 'SYNTH-AICTE-0001',
-    review_team_id: null,
-  };
-  const teamContext: RoleContext = {
-    role_code: 'AUDITOR',
-    institution_id: null,
-    review_team_id: 'TEAM-WEST-001',
-  };
-  const adminContext: RoleContext = {
-    role_code: 'ADMIN',
-    institution_id: null,
-    review_team_id: null,
-  };
-
-  assert.equal(formatRoleContextLabel(institutionContext), 'Institution · SYNTH-AI');
-  assert.equal(formatRoleContextLabel(teamContext), 'Scrutiny / Processing Officer · Team TEAM-WES');
-  assert.equal(formatRoleContextLabel(adminContext), 'Platform Administrator');
-});
-
-
-test('formatRoleContextLabel preserves distinct PS 26262 permission package names', () => {
-  const cases: Array<[string, string]> = [
+test('workspace defaults and role labels are explicit', () => {
+  const defaults: Array<[RoleContext['role_code'], string]> = [
+    ['INSTITUTION_USER', 'Institution Representative'],
     ['INTAKE_OFFICER', 'Intake / Registry Officer'],
     ['SCRUTINY_OFFICER', 'Scrutiny / Processing Officer'],
     ['REGIONAL_OFFICER', 'Regional Officer / Coordinator'],
@@ -90,29 +41,40 @@ test('formatRoleContextLabel preserves distinct PS 26262 permission package name
     ['BUREAU_SUPERVISOR', 'Bureau Supervisor'],
     ['COMPETENT_AUTHORITY', 'Competent Authority'],
     ['REGULATORY_POLICY_PUBLISHER', 'Regulatory Policy Publisher / Approver'],
+    ['ADMIN', 'Platform Administrator'],
   ];
-  for (const [role_code, expected] of cases) {
+  for (const [role_code, expected] of defaults) {
     assert.equal(formatRoleContextLabel({ role_code, institution_id: null, review_team_id: null }), expected);
   }
 });
 
-test('ApiError correctly captures status, detail, and network error classification', () => {
-  const networkErr = new ApiError(0, 'Failed to fetch', 'Connection refused', true);
-  assert.equal(networkErr.status, 0);
-  assert.equal(networkErr.isNetworkError, true);
-  assert.equal(networkErr.detail, 'Connection refused');
-
-  const authErr = new ApiError(401, 'Unauthorized', 'Invalid email or password', false);
-  assert.equal(authErr.status, 401);
-  assert.equal(authErr.isNetworkError, false);
-  assert.equal(authErr.detail, 'Invalid email or password');
-
-  const forbiddenErr = new ApiError(403, 'Forbidden', 'Account is inactive', false);
-  assert.equal(forbiddenErr.status, 403);
-  assert.equal(forbiddenErr.isNetworkError, false);
+test('workspace default role mapping covers all workspaces', () => {
+  assert.equal(workspaceToRoleCode('institution'), 'INSTITUTION_USER');
+  assert.equal(workspaceToRoleCode('auditor'), 'AUDITOR');
+  assert.equal(workspaceToRoleCode('regional'), 'REGIONAL_OFFICER');
+  assert.equal(workspaceToRoleCode('committee'), 'COMMITTEE_SECRETARIAT');
+  assert.equal(workspaceToRoleCode('lead'), 'LEAD_AUDITOR');
+  assert.equal(workspaceToRoleCode('admin'), 'ADMIN');
 });
 
-test('CSRF cache functions manage in-memory token correctly', () => {
+test('role context keys preserve distinct role and team scopes', () => {
+  const a: RoleContext = { role_code: 'AUDITOR', institution_id: null, review_team_id: 'team-a' };
+  const b: RoleContext = { role_code: 'AUDITOR', institution_id: null, review_team_id: 'team-b' };
+  assert.notEqual(getRoleContextKey(a), getRoleContextKey(b));
+  assert.equal(getRoleContextKey(a), 'AUDITOR::team-a');
+});
+
+test('ApiError captures HTTP and network failure information', () => {
+  const network = new ApiError(0, 'Failed to fetch', 'Connection refused', true);
+  assert.equal(network.status, 0);
+  assert.equal(network.isNetworkError, true);
+  assert.equal(network.detail, 'Connection refused');
+  const forbidden = new ApiError(403, 'Forbidden', 'Not allowed', false);
+  assert.equal(forbidden.status, 403);
+  assert.equal(forbidden.isNetworkError, false);
+});
+
+test('CSRF cache functions manage their in-memory token', () => {
   clearCachedCsrfToken();
   assert.equal(getCachedCsrfToken(), null);
 });

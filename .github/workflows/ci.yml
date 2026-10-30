@@ -2,7 +2,7 @@ name: AIC-Flow Quality Gates CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, feat/ps26262-six-workspaces ]
   pull_request:
     branches: [ main, master ]
 

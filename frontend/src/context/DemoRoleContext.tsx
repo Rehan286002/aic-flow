@@ -10,8 +10,10 @@ const SIDEBAR_STORAGE_KEY = 'aic_flow_sidebar_collapsed';
 
 function getRoleFromPath(path: string): Role | null {
   if (path.startsWith('/institution')) return 'institution';
-  if (path.startsWith('/auditor')) return 'auditor';
-  if (path.startsWith('/lead')) return 'lead';
+  if (path.startsWith('/office') || path.startsWith('/auditor')) return 'auditor';
+  if (path.startsWith('/regional')) return 'regional';
+  if (path.startsWith('/committee')) return 'committee';
+  if (path.startsWith('/bureau') || path.startsWith('/lead')) return 'lead';
   if (path.startsWith('/admin')) return 'admin';
   return null;
 }

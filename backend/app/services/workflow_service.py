@@ -87,6 +87,12 @@ EVENT_ROLE_ALLOWLIST: dict[str, set[str]] = {
     "COMMITTEE_CONVENED": {"COMMITTEE_SECRETARIAT"},
     "COMMITTEE_MINUTES_RECORDED": {"COMMITTEE_SECRETARIAT"},
     "OFFICER_NOTE": {"INTAKE_OFFICER", "SCRUTINY_OFFICER", "REGIONAL_OFFICER", "BUREAU_SUPERVISOR", "AUDITOR", "LEAD_AUDITOR"},
+    "DECISION_RECORDED": {"COMPETENT_AUTHORITY"},
+    "DOCUMENT_VALIDITY_RECORDED": {"INSTITUTION_USER"},
+    "DOCUMENT_RENEWAL_SUBMITTED": {"INSTITUTION_USER"},
+    "DOCUMENT_VALIDITY_CONFIRMED": {"SCRUTINY_OFFICER", "AUDITOR", "REGIONAL_OFFICER", "BUREAU_SUPERVISOR", "LEAD_AUDITOR"},
+    "ESCALATION_ACKNOWLEDGED": {"REGIONAL_OFFICER", "BUREAU_SUPERVISOR", "LEAD_AUDITOR"},
+    "ESCALATION_RESOLVED": {"REGIONAL_OFFICER", "BUREAU_SUPERVISOR", "LEAD_AUDITOR"},
 }
 
 EVENT_STAGE_ALLOWLIST: dict[str, set[str]] = {
@@ -94,6 +100,7 @@ EVENT_STAGE_ALLOWLIST: dict[str, set[str]] = {
     "EVC_REPORT_RECORDED": {"EVC_SCHEDULED"},
     "COMMITTEE_CONVENED": {"COMMITTEE_PROCEEDINGS"},
     "COMMITTEE_MINUTES_RECORDED": {"COMMITTEE_PROCEEDINGS"},
+    "DECISION_RECORDED": {"AWAITING_AUTHORITY"},
 }
 
 
@@ -383,25 +390,42 @@ def case_access_context(
     case: WorkflowCase | None = None,
     user_id: uuid.UUID | None = None,
 ) -> Any:
-    """Return a scoped active permission package or deny case access.
-
-    Institution users are restricted to their own institution. Operational users
-    are restricted to their active review team. An explicitly assigned officer
-    is the only non-supervisory user who may open that individually assigned case.
-    """
+    """Resolve resource access from tenant/team scope, stage role and individual assignment."""
+    supervisors = {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}
     for context in role_contexts:
         if context.role_code == "INSTITUTION_USER" and context.institution_id == application.institution_id:
             return context
+
         in_team_scope = bool(context.review_team_id and context.review_team_id == application.review_team_id)
         unassigned_intake = context.role_code == "INTAKE_OFFICER" and application.review_team_id is None
-        if in_team_scope or unassigned_intake:
-            is_supervisor = context.role_code in {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}
-            if case and case.assigned_user_id and user_id and case.assigned_user_id != user_id and not is_supervisor:
+        if not (in_team_scope or unassigned_intake):
+            continue
+
+        if case is not None and context.role_code not in supervisors:
+            assigned_role = case.assigned_role_code
+            role_match = assigned_role == context.role_code
+            if context.role_code == "AUDITOR":
+                role_match = assigned_role in {"INTAKE_OFFICER", "SCRUTINY_OFFICER"}
+            elif context.role_code == "COMMITTEE_SECRETARIAT":
+                role_match = role_match or (
+                    case.current_stage == "EVC_COMPLETED"
+                    and (case.route_snapshot or {}).get("requires_committee") is True
+                )
+            elif context.role_code == "EVC_COORDINATOR":
+                role_match = role_match or (
+                    case.current_stage == "EVC_COMPLETED"
+                    and (case.route_snapshot or {}).get("requires_committee") is False
+                )
+            if not role_match:
                 continue
-            return context
+
+            if case.assigned_user_id and user_id and case.assigned_user_id != user_id:
+                continue
+        return context
+
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="This case is outside the user's authorised institution, review-team or individual assignment scope.",
+        detail="This case is outside the user's institution, team, stage-role or individual assignment scope.",
     )
 
 

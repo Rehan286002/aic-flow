@@ -7,6 +7,7 @@ from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
 from app.api.routes.validation import router as validation_router
 from app.api.routes.workflow import router as workflow_router
+from app.api.routes.document_validity import router as document_validity_router
 from app.core.config import settings
 
 # Initialize the FastAPI application
@@ -31,6 +32,7 @@ app.include_router(applications_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
 app.include_router(validation_router, prefix="/api/v1")
 app.include_router(workflow_router, prefix="/api/v1")
+app.include_router(document_validity_router, prefix="/api/v1")
 
 
 @app.get("/")

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -85,6 +85,12 @@ class WorkflowEventCreateRequest(BaseModel):
         "COMMITTEE_CONVENED",
         "COMMITTEE_MINUTES_RECORDED",
         "OFFICER_NOTE",
+        "DECISION_RECORDED",
+        "DOCUMENT_VALIDITY_RECORDED",
+        "DOCUMENT_RENEWAL_SUBMITTED",
+        "DOCUMENT_VALIDITY_CONFIRMED",
+        "ESCALATION_ACKNOWLEDGED",
+        "ESCALATION_RESOLVED",
     ]
     summary: str = Field(min_length=8, max_length=2000)
     event_payload: dict[str, Any] = Field(default_factory=dict)
@@ -126,3 +132,42 @@ class WorkflowTeamAssignmentRequest(BaseModel):
     ] = "INTAKE_OFFICER"
     assigned_user_id: uuid.UUID | None = None
     note: str = Field(min_length=8, max_length=1000)
+
+
+class DocumentValidityCreateRequest(BaseModel):
+    document_id: uuid.UUID
+    document_version_id: uuid.UUID
+    document_type: str = Field(min_length=3, max_length=60)
+    issuer: str = Field(min_length=2, max_length=300)
+    valid_from: date | None = None
+    valid_until: date
+    document_reference: str = Field(min_length=3, max_length=500)
+
+
+class DocumentValidityActionRequest(BaseModel):
+    action: Literal["VERIFY", "RETURN"]
+    note: str = Field(min_length=5, max_length=2000)
+
+
+class DocumentValidityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_validity_id: uuid.UUID
+    workflow_case_id: uuid.UUID
+    application_id: uuid.UUID
+    institution_id: uuid.UUID
+    document_id: uuid.UUID
+    document_version_id: uuid.UUID
+    document_type: str
+    issuer: str
+    valid_from: date | None = None
+    valid_until: date
+    document_reference: str
+    verification_status: str
+    verification_note: str | None = None
+    replacement_of_id: uuid.UUID | None = None
+    created_by: uuid.UUID
+    verified_by: uuid.UUID | None = None
+    verified_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
