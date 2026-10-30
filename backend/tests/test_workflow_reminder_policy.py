@@ -37,7 +37,7 @@ def test_reminder_schedule_requires_timezone_aware_dates():
         )
 
 
-def test_reminder_templates_fill_only_configured_placeholders():
+def test_reminder_templates_fill_configured_placeholders():
     result = render_reminder_template(
         "{condition_title} for {application_number} is due on {due_date}.",
         {
@@ -53,7 +53,7 @@ def test_invalid_reminder_template_falls_back_without_crashing_worker():
     assert render_reminder_template("Due {unknown_field}", {}) == "Due {unknown_field}"
 
 
-def test_policy_update_requires_at_least_one_change_and_bounds_offsets():
+def test_policy_update_requires_a_change_and_bounds_offsets():
     with pytest.raises(ValidationError):
         WorkflowReminderPolicyUpdateRequest()
     with pytest.raises(ValidationError):
