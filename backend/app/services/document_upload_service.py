@@ -284,7 +284,9 @@ class DocumentUploadService:
                 )
                 v_read = self._build_version_read(v, scan, job)
                 version_reads.append(v_read)
-                if active_version_id is None and v_read.is_clean:
+                # Do not keep an older clean upload active when a newer replacement
+                # is pending, rejected or failed its safety scan.
+                if v is versions[0] and v_read.is_clean:
                     active_version_id = v.document_version_id
 
         return DocumentHistoryResponse(
