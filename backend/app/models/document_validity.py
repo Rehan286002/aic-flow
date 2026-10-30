@@ -80,6 +80,7 @@ class DocumentValidityRecord(Base):
     maximum_course_duration_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
     lease_minimum_term_met: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     lease_live_term_met_at_submission: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    lease_eoa_cutoff_year_triggered: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     lease_assessed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     validity_basis_reference: Mapped[str] = mapped_column(Text, nullable=False)
