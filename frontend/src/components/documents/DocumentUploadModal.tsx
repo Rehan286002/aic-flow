@@ -29,6 +29,7 @@ interface DocumentUploadModalProps {
   onOpenChange: (open: boolean) => void;
   requirement: ApplicationRequirementItem | null;
   obligationId?: string | null;
+  validityCaseId?: string | null;
   onUploadSuccess: (response: DocumentUploadResponse) => void;
 }
 
@@ -37,6 +38,7 @@ export function DocumentUploadModal({
   onOpenChange,
   requirement,
   obligationId = null,
+  validityCaseId = null,
   onUploadSuccess,
 }: DocumentUploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -121,15 +123,21 @@ export function DocumentUploadModal({
             selectedFile,
             evidenceNote.trim(),
           )
-        : await documentsApi.upload(
-            requirement.application_requirement_id,
-            selectedFile
-          );
+        : validityCaseId
+          ? await workflowApi.uploadDocumentValiditySource(
+              validityCaseId,
+              requirement.application_requirement_id,
+              selectedFile,
+            )
+          : await documentsApi.upload(
+              requirement.application_requirement_id,
+              selectedFile
+            );
       setScanResult(res);
 
       if (res.document_version.is_clean) {
-        toast.success(obligationId ? 'Condition evidence submitted' : 'Document uploaded successfully', {
-          description: obligationId ? 'The clean document version is linked to the selected approval condition.' : `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
+        toast.success(obligationId ? 'Condition evidence submitted' : validityCaseId ? 'Renewed document uploaded' : 'Document uploaded successfully', {
+          description: obligationId ? 'The clean document version is linked to the selected approval condition.' : validityCaseId ? 'The clean replacement version is available for validity details and officer review.' : `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
         });
         onUploadSuccess(res);
       } else if (res.document_version.security_scan?.scan_status === 'DETECTED') {
