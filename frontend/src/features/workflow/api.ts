@@ -175,6 +175,20 @@ export interface WorkflowDetail extends WorkflowCase {
   sac_appeal: SACAppeal | null;
 }
 
+export interface WorkflowReminderPolicy {
+  reminder_policy_id: string;
+  policy_code: string;
+  target_type: 'WORKFLOW_CASE' | 'OBLIGATION';
+  days_from_due: number;
+  recipient_group: 'INSTITUTION' | 'ASSIGNEE' | 'SUPERVISORS';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  title_template: string;
+  body_template: string;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkflowNotification {
   notification_id: string;
   application_id: string | null;
@@ -333,6 +347,15 @@ export const workflowApi = {
   },
   getObligationEvidenceDownloadUrl: (obligationId: string) =>
     `/api/v1/workflow/obligations/${encodeURIComponent(obligationId)}/evidence/download`,
+  reminderPolicies: () => request<WorkflowReminderPolicy[]>('/api/v1/workflow/reminder-policies'),
+  updateReminderPolicy: (id: string, payload: {
+    is_enabled?: boolean;
+    days_from_due?: number;
+    recipient_group?: 'INSTITUTION' | 'ASSIGNEE' | 'SUPERVISORS';
+    severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  }) => request<WorkflowReminderPolicy>(`/api/v1/workflow/reminder-policies/${id}`, {
+    method: 'PATCH', body: JSON.stringify(payload),
+  }, true),
   notifications: () => request<WorkflowNotification[]>('/api/v1/workflow/notifications'),
   markRead: (id: string) => request<WorkflowNotification>(`/api/v1/workflow/notifications/${id}/read`, { method: 'PATCH' }, true),
 };
