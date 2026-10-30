@@ -46,6 +46,7 @@ from app.models.digital_signature_check import DigitalSignatureCheck
 from app.models.evc_visit import EVCVisit
 from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
+from app.models.sac_appeal import SACAppeal
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.compliance_obligation import ComplianceObligation
@@ -104,6 +105,7 @@ __all__ = [
     "EVCVisit",
     "ExecutiveCommitteeDecision",
     "SHCProceeding",
+    "SACAppeal",
     "WorkflowCase",
     "WorkflowEvent",
     "ComplianceObligation",
