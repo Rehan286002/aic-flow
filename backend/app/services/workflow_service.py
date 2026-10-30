@@ -207,6 +207,12 @@ def notify_case_participants(
     event: WorkflowEvent,
     message: str,
 ) -> None:
+    """Notify the institution and only the receiving role, assignee and supervisors.
+
+    A team is not a broadcast list: operational recipients are resolved from the
+    case's current receiving role and assignment. Historical or unassigned cases
+    do not fan out to every officer in the review team.
+    """
     application = db.get(Application, case.application_id)
     if application is None:
         return
@@ -219,20 +225,23 @@ def notify_case_participants(
             )
         ).all()
     )
+
+    supervisor_roles = ["BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"]
     if application.review_team_id:
-        team_members_query = select(ReviewTeamMember.user_id).where(
+        target_roles = list(supervisor_roles)
+        if case.assigned_role_code and not case.assigned_user_id:
+            target_roles.append(case.assigned_role_code)
+
+        team_members = select(ReviewTeamMember.user_id).where(
             ReviewTeamMember.review_team_id == application.review_team_id,
             ReviewTeamMember.is_active.is_(True),
+            ReviewTeamMember.team_role.in_(target_roles),
         )
-        if case.assigned_user_id:
-            # Once individually assigned, notify the assignee and supervisory members,
-            # not every officer in the team.
-            team_members_query = team_members_query.where(
-                ReviewTeamMember.team_role.in_(["BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"])
-            )
-        recipients.update(db.scalars(team_members_query).all())
+        recipients.update(db.scalars(team_members).all())
+
     if case.assigned_user_id:
         recipients.add(case.assigned_user_id)
+    recipients.add(event.actor_user_id)
 
     for recipient in recipients:
         db.add(
