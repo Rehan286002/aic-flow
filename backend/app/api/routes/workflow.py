@@ -29,6 +29,7 @@ from app.models.enums import TeamRole
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.workflow_reminder import WorkflowReminderPolicy
+from app.models.workflow_reminder import WorkflowReminderPolicy
 from app.schemas.document import DocumentUploadResponse
 from app.schemas.workflow import (
     ComplianceObligationActionRequest,
@@ -1002,6 +1003,70 @@ def list_obligations(
 
     rows = db.execute(stmt.where(or_(*scope)).order_by(ComplianceObligation.due_at.asc())).all()
     return [ComplianceObligationResponse.model_validate(item) for item, _application in rows]
+
+
+@router.get("/reminder-policies", response_model=list[WorkflowReminderPolicyResponse])
+def list_workflow_reminder_policies(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[WorkflowReminderPolicyResponse]:
+    role_codes = {context.role_code for context in _contexts(current_user, db)}
+    if not role_codes.intersection({"REGULATORY_POLICY_PUBLISHER", "ADMIN"}):
+        raise HTTPException(status_code=403, detail="Regulatory policy access is required to view reminder schedules.")
+    policies = db.scalars(
+        select(WorkflowReminderPolicy).order_by(
+            WorkflowReminderPolicy.target_type,
+            WorkflowReminderPolicy.days_from_due,
+            WorkflowReminderPolicy.policy_code,
+        )
+    ).all()
+    return [WorkflowReminderPolicyResponse.model_validate(policy) for policy in policies]
+
+
+@router.patch("/reminder-policies/{reminder_policy_id}", response_model=WorkflowReminderPolicyResponse)
+def update_workflow_reminder_policy(
+    reminder_policy_id: uuid.UUID,
+    payload: WorkflowReminderPolicyUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> WorkflowReminderPolicyResponse:
+    role_codes = {context.role_code for context in _contexts(current_user, db)}
+    if "REGULATORY_POLICY_PUBLISHER" not in role_codes:
+        raise HTTPException(status_code=403, detail="Only the Regulatory Policy Publisher may change reminder schedules.")
+    policy = db.scalar(
+        select(WorkflowReminderPolicy)
+        .where(WorkflowReminderPolicy.reminder_policy_id == reminder_policy_id)
+        .with_for_update()
+    )
+    if policy is None:
+        raise HTTPException(status_code=404, detail="Reminder policy not found.")
+
+    next_days = payload.days_from_due if payload.days_from_due is not None else policy.days_from_due
+    next_group = payload.recipient_group if payload.recipient_group is not None else policy.recipient_group
+    conflict = db.scalar(
+        select(WorkflowReminderPolicy.reminder_policy_id).where(
+            WorkflowReminderPolicy.reminder_policy_id != reminder_policy_id,
+            WorkflowReminderPolicy.target_type == policy.target_type,
+            WorkflowReminderPolicy.days_from_due == next_days,
+            WorkflowReminderPolicy.recipient_group == next_group,
+        )
+    )
+    if conflict is not None:
+        raise HTTPException(status_code=409, detail="Another reminder policy already uses this target, offset and recipient group.")
+
+    if payload.days_from_due is not None:
+        policy.days_from_due = payload.days_from_due
+    if payload.recipient_group is not None:
+        policy.recipient_group = payload.recipient_group
+    if payload.severity is not None:
+        policy.severity = payload.severity
+    if payload.is_enabled is not None:
+        policy.is_enabled = payload.is_enabled
+    policy.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(policy)
+    return WorkflowReminderPolicyResponse.model_validate(policy)
 
 
 @router.get("/reminder-policies", response_model=list[WorkflowReminderPolicyResponse])
