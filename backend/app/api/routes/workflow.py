@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -913,7 +914,7 @@ async def upload_compliance_obligation_evidence(
         obligation.submitted_at = now
         obligation.verification_note = note.strip()
         obligation.updated_at = now
-        event = add_workflow_event(
+        add_workflow_event(
             db,
             case,
             current_user.user_id,
