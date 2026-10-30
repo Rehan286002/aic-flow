@@ -478,7 +478,7 @@ class WorkflowReminderPolicyResponse(BaseModel):
 
     reminder_policy_id: uuid.UUID
     policy_code: str
-    target_type: Literal["WORKFLOW_CASE", "OBLIGATION"]
+    target_type: Literal["WORKFLOW_CASE", "OBLIGATION", "DOCUMENT_VALIDITY"]
     days_from_due: int
     recipient_group: Literal["INSTITUTION", "ASSIGNEE", "SUPERVISORS"]
     severity: Literal["INFO", "WARNING", "CRITICAL"]
