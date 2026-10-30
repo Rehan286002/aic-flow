@@ -29,7 +29,6 @@ from app.models.enums import TeamRole
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.workflow_reminder import WorkflowReminderPolicy
-from app.models.workflow_reminder import WorkflowReminderPolicy
 from app.schemas.document import DocumentUploadResponse
 from app.schemas.workflow import (
     ComplianceObligationActionRequest,
