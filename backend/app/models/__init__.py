@@ -19,6 +19,7 @@ from app.models.application_field_value import ApplicationFieldValue
 from app.models.document_type import DocumentType
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
+from app.models.document_validity import DocumentValidityRecord
 from app.models.application_document_link import ApplicationDocumentLink
 from app.models.document_processing_job import DocumentProcessingJob
 from app.models.document_extraction import DocumentExtraction
@@ -82,6 +83,7 @@ __all__ = [
     "DocumentType",
     "Document",
     "DocumentVersion",
+    "DocumentValidityRecord",
     "ApplicationDocumentLink",
     "DocumentProcessingJob",
     "DocumentExtraction",
