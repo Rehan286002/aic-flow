@@ -126,3 +126,38 @@ def test_issuer_defined_document_requires_dates_and_basis():
 
 def test_calendar_year_helper_handles_february_leap_years():
     assert add_calendar_years(date(2024, 2, 29), 1) == date(2025, 2, 28)
+
+
+
+def test_lease_assessment_uses_the_indian_local_submission_date():
+    submitted_at = datetime(2026, 10, 30, 20, 0, tzinfo=UTC)
+    result = calculate_document_validity(
+        validity_type="LEASE_DEED",
+        issue_date=None,
+        valid_from=None,
+        valid_until=None,
+        lease_start_date=date(2000, 10, 31),
+        lease_end_date=date(2030, 10, 31),
+        maximum_course_duration_years=4,
+        application_submitted_at=submitted_at,
+        validity_basis_reference="AICTE APH 2024-27 Clause 6.17(a)",
+    )
+    assert result["lease_assessed_on"] == date(2026, 10, 31)
+    assert result["lease_live_term_met_at_submission"] is True
+    assert result["lease_eoa_cutoff_year_triggered"] is True
+
+
+def test_issuer_document_rejects_effective_date_after_expiry():
+    with pytest.raises(HTTPException) as exc:
+        calculate_document_validity(
+            validity_type="ISSUER_DATED_DOCUMENT",
+            issue_date=date(2026, 1, 1),
+            valid_from=date(2027, 2, 1),
+            valid_until=date(2027, 1, 1),
+            lease_start_date=None,
+            lease_end_date=None,
+            maximum_course_duration_years=None,
+            application_submitted_at=None,
+            validity_basis_reference="Issuing authority validity clause",
+        )
+    assert exc.value.status_code == 422
