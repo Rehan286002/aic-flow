@@ -28,6 +28,7 @@ from app.models.review_team_member import ReviewTeamMember
 from app.models.enums import TeamRole
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
+from app.schemas.document import DocumentUploadResponse
 from app.schemas.workflow import (
     ComplianceObligationActionRequest,
     EVCVisitCancelRequest,
@@ -50,7 +51,6 @@ from app.schemas.workflow import (
     CouncilDecisionRequest,
     ComplianceObligationCreateRequest,
     ComplianceObligationResponse,
-    DocumentUploadResponse,
     NotificationResponse,
     WorkflowCaseDetailResponse,
     WorkflowCaseListResponse,
@@ -858,7 +858,13 @@ def update_obligation(
         current_user.user_id,
         event_type=f"OBLIGATION_{payload.action}",
         summary=payload.note,
-        event_payload={"obligation_id": str(obligation.obligation_id), "status": obligation.status},
+        event_payload={
+            "obligation_id": str(obligation.obligation_id),
+            "status": obligation.status,
+            "evidence_document_id": str(obligation.evidence_document_id) if obligation.evidence_document_id else None,
+            "evidence_document_version_id": str(obligation.evidence_document_version_id) if obligation.evidence_document_version_id else None,
+            "evidence_requirement_id": str(obligation.evidence_requirement_id) if obligation.evidence_requirement_id else None,
+        },
     )
     db.commit()
     db.refresh(obligation)
