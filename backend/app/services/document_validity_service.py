@@ -15,7 +15,6 @@ from app.models.document import Document
 from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_validity import DocumentValidityRecord
 from app.models.document_version import DocumentVersion
-from app.models.enums import RevisionStatus
 from app.models.workflow_case import WorkflowCase
 from app.services.workflow_service import add_workflow_event
 
@@ -323,10 +322,12 @@ def review_document_validity(
             )
             .with_for_update()
         ).all()
+        if previous_records:
+            previous_records.sort(key=lambda item: item.reviewed_at or item.created_at, reverse=True)
+            record.supersedes_validity_record_id = previous_records[0].document_validity_record_id
         for previous in previous_records:
             previous.status = "SUPERSEDED"
             previous.updated_at = now
-            previous.supersedes_validity_record_id = None
         record.status = "VERIFIED"
         record.reviewed_by = actor_user_id
         record.reviewed_at = now
