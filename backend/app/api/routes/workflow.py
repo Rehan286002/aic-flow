@@ -39,6 +39,7 @@ from app.services.workflow_service import (
     EVENT_ROLE_ALLOWLIST,
     add_workflow_event,
     case_access_context,
+    institution_timeline_projection,
     create_obligation,
     list_case_obligations,
     transition_case,
@@ -131,6 +132,10 @@ def list_workflow_cases(
                         WorkflowCase.current_stage == "EVC_COMPLETED",
                         WorkflowCase.route_snapshot["requires_committee"].astext == "false",
                     ),
+                    and_(
+                        WorkflowCase.current_stage == "EVC_SCHEDULED",
+                        WorkflowCase.route_snapshot["requires_evc"].astext == "true",
+                    ),
                 )
             else:
                 stage_role_scope = WorkflowCase.assigned_role_code == context.role_code
@@ -141,9 +146,15 @@ def list_workflow_cases(
                     WorkflowCase.route_snapshot["requires_committee"].astext == "true",
                 )
             elif context.role_code == "EVC_COORDINATOR":
-                handoff_scope = and_(
-                    WorkflowCase.current_stage == "EVC_COMPLETED",
-                    WorkflowCase.route_snapshot["requires_committee"].astext == "false",
+                handoff_scope = or_(
+                    and_(
+                        WorkflowCase.current_stage == "EVC_COMPLETED",
+                        WorkflowCase.route_snapshot["requires_committee"].astext == "false",
+                    ),
+                    and_(
+                        WorkflowCase.current_stage == "EVC_SCHEDULED",
+                        WorkflowCase.route_snapshot["requires_evc"].astext == "true",
+                    ),
                 )
             team_scope = and_(
                 team_scope,
@@ -163,7 +174,16 @@ def list_workflow_cases(
         ))
     stmt = stmt.where(or_(*scope_clauses)).order_by(WorkflowCase.updated_at.desc())
     rows = db.execute(stmt).all()
-    return [_to_list_item(db, case, application) for case, application in rows]
+    responses: list[WorkflowCaseListResponse] = []
+    for case, application in rows:
+        response = _to_list_item(db, case, application)
+        if application.institution_id in institution_ids:
+            response = response.model_copy(update={
+                "assigned_role_code": None,
+                "assigned_user_id": None,
+            })
+        responses.append(response)
+    return responses
 
 
 @router.get("/cases/{workflow_case_id}", response_model=WorkflowCaseDetailResponse)
@@ -173,18 +193,55 @@ def get_workflow_case(
     db: Annotated[Session, Depends(get_db)],
 ) -> WorkflowCaseDetailResponse:
     case, application = _get_case(db, workflow_case_id)
-    _require_case_access(db, application, current_user)
+    context = _require_case_access(db, application, current_user)
     base = _to_list_item(db, case, application)
+    if context.role_code == "INSTITUTION_USER":
+        base = base.model_copy(update={
+            "assigned_role_code": None,
+            "assigned_user_id": None,
+        })
     events = list(db.scalars(select(WorkflowEvent).where(
         WorkflowEvent.workflow_case_id == case.workflow_case_id
     ).order_by(WorkflowEvent.occurred_at.asc())).all())
-    obligations = list_case_obligations(db, case.workflow_case_id)
+    if context.role_code == "INSTITUTION_USER":
+        event_responses: list[WorkflowEventResponse] = []
+        for event in events:
+            projection = institution_timeline_projection(event)
+            if projection is None:
+                continue
+            event_responses.append(WorkflowEventResponse(
+                workflow_event_id=event.workflow_event_id,
+                workflow_case_id=event.workflow_case_id,
+                application_id=event.application_id,
+                event_type=projection["event_type"],
+                from_stage=projection["from_stage"],
+                to_stage=projection["to_stage"],
+                summary=projection["summary"],
+                event_payload={},
+                actor_user_id=None,
+                occurred_at=event.occurred_at,
+            ))
+    else:
+        event_responses = [WorkflowEventResponse.model_validate(item) for item in events]
+
+    raw_obligations = list_case_obligations(db, case.workflow_case_id)
+    if context.role_code == "INSTITUTION_USER":
+        obligation_responses = [
+            ComplianceObligationResponse.model_validate(item).model_copy(update={
+                "verification_note": item.verification_note if item.status == "RETURNED" else None,
+                "verified_by": None,
+            })
+            for item in raw_obligations
+        ]
+    else:
+        obligation_responses = [ComplianceObligationResponse.model_validate(item) for item in raw_obligations]
+
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
         requirements=application_detail.requirements,
-        events=[WorkflowEventResponse.model_validate(item) for item in events],
-        obligations=[ComplianceObligationResponse.model_validate(item) for item in obligations],
+        events=event_responses,
+        obligations=obligation_responses,
     )
 
 
@@ -430,7 +487,6 @@ def update_obligation(
         if role not in {"SCRUTINY_OFFICER", "AUDITOR"} or obligation.status != "EVIDENCE_SUBMITTED":
             raise HTTPException(status_code=403, detail="Only an assigned scrutiny officer may start evidence verification.")
         obligation.status = "UNDER_VERIFICATION"
-        obligation.verification_note = payload.note
     elif payload.action == "VERIFY":
         if role not in {"SCRUTINY_OFFICER", "AUDITOR", "BUREAU_SUPERVISOR", "LEAD_AUDITOR"} or obligation.status not in {"EVIDENCE_SUBMITTED", "UNDER_VERIFICATION"}:
             raise HTTPException(status_code=403, detail="This role cannot verify the submitted condition evidence.")
@@ -501,7 +557,17 @@ def list_obligations(
         scope.append(team_scope)
 
     rows = db.execute(stmt.where(or_(*scope)).order_by(ComplianceObligation.due_at.asc())).all()
-    return [ComplianceObligationResponse.model_validate(item) for item, _application in rows]
+    institution_scope_ids = {context.institution_id for context in contexts if context.role_code == "INSTITUTION_USER" and context.institution_id}
+    responses: list[ComplianceObligationResponse] = []
+    for item, application in rows:
+        response = ComplianceObligationResponse.model_validate(item)
+        if application.institution_id in institution_scope_ids:
+            response = response.model_copy(update={
+                "verification_note": item.verification_note if item.status == "RETURNED" else None,
+                "verified_by": None,
+            })
+        responses.append(response)
+    return responses
 
 
 @router.get("/notifications", response_model=list[NotificationResponse])

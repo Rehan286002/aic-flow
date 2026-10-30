@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --test src/test/auth-logic.test.ts src/test/application-logic.test.ts src/test/document-logic.test.ts src/test/document-extraction-logic.test.ts src/test/validation-logic.test.ts src/test/demo-store-logic.test.ts src/test/lead-supervisory-logic.test.ts src/test/merkle-and-assist-logic.test.ts src/test/crypto-integrity.test.ts",
+    "test": "node --experimental-strip-types --test src/test/auth-logic.test.ts src/test/application-logic.test.ts src/test/document-logic.test.ts src/test/document-extraction-logic.test.ts src/test/validation-logic.test.ts src/test/demo-store-logic.test.ts src/test/lead-supervisory-logic.test.ts src/test/merkle-and-assist-logic.test.ts src/test/crypto-integrity.test.ts src/test/workflow-queue-logic.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

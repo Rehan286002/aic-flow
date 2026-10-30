@@ -47,12 +47,9 @@ export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) 
                   <span className="font-bold text-base tracking-tight text-white leading-tight">
                     AIC-Flow
                   </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 px-1 rounded">
-                    v1.0
-                  </span>
                 </div>
                 <span className="text-[11px] text-[#B7C3D6] truncate leading-tight mt-0.5">
-                  AICTE Regulatory Engine
+                  Approval & Compliance Workspace
                 </span>
               </div>
             )}
@@ -167,7 +164,7 @@ export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) 
                 <Sparkles className="size-3 text-indigo-400" />
                 <span>Academic Year 2026-27</span>
               </span>
-              <span className="font-mono text-[10px] text-slate-400">SIH 26262</span>
+              <span className="text-[10px] text-slate-400">Approval workflow</span>
             </div>
 
             {!isMobileSheet && (

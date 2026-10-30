@@ -280,10 +280,78 @@ def institution_notification_projection(event: Any) -> tuple[str, str, str] | No
             "WARNING",
         )
 
+    obligation_messages = {
+        "OBLIGATION_CREATED": (
+            "New approval condition",
+            "A condition has been added to your application. Open Obligations to review what is required and the due date.",
+            "WARNING",
+        ),
+        "OBLIGATION_SUBMIT_EVIDENCE": (
+            "Condition evidence submitted",
+            "Your supporting evidence has been submitted and is awaiting officer review.",
+            "INFO",
+        ),
+        "OBLIGATION_START_VERIFICATION": (
+            "Condition evidence under review",
+            "An officer has started reviewing the evidence submitted for an application condition.",
+            "INFO",
+        ),
+        "OBLIGATION_VERIFY": (
+            "Condition evidence verified",
+            "An authorised officer has verified the evidence submitted for an application condition.",
+            "INFO",
+        ),
+        "OBLIGATION_RETURN": (
+            "Condition evidence needs correction",
+            "An officer has returned the submitted evidence. Open Obligations to read the correction note and submit an updated file.",
+            "WARNING",
+        ),
+        "OBLIGATION_CLOSE": (
+            "Condition completed",
+            "An application condition has been marked complete after verification.",
+            "INFO",
+        ),
+    }
+    if event_type in obligation_messages:
+        return obligation_messages[event_type]
+
     # All other event types are internal unless an explicit safe projection is
     # added here. In particular, do not forward OFFICER_NOTE, EVC reports,
     # committee proceedings/minutes, decisions or supervisory escalations.
     return None
+
+
+INSTITUTION_TIMELINE_EVENT_TYPES = {
+    "STAGE_TRANSITION": "APPLICATION_STATUS_UPDATED",
+    "CLARIFICATION_REQUESTED": "CLARIFICATION_REQUESTED",
+    "EVC_VISIT_SCHEDULED": "EVC_VISIT_SCHEDULED",
+    "DOCUMENT_VALIDITY_RECORDED": "DOCUMENT_VALIDITY_SUBMITTED",
+    "DOCUMENT_RENEWAL_SUBMITTED": "DOCUMENT_RENEWAL_SUBMITTED",
+    "DOCUMENT_VALIDITY_CONFIRMED": "DOCUMENT_VALIDITY_REVIEWED",
+    "DEMO_COMPLIANCE_ALERT": "COMPLIANCE_REMINDER",
+    "DEMO_DOCUMENT_EXPIRY_ALERT": "DOCUMENT_EXPIRY_REMINDER",
+    "OBLIGATION_CREATED": "OBLIGATION_CREATED",
+    "OBLIGATION_SUBMIT_EVIDENCE": "OBLIGATION_EVIDENCE_SUBMITTED",
+    "OBLIGATION_START_VERIFICATION": "OBLIGATION_EVIDENCE_UNDER_REVIEW",
+    "OBLIGATION_VERIFY": "OBLIGATION_EVIDENCE_VERIFIED",
+    "OBLIGATION_RETURN": "OBLIGATION_EVIDENCE_RETURNED",
+    "OBLIGATION_CLOSE": "OBLIGATION_COMPLETED",
+}
+
+
+def institution_timeline_projection(event: Any) -> dict[str, Any] | None:
+    """Return a safe, plain-language event summary for an institution account."""
+    projection = institution_notification_projection(event)
+    if projection is None:
+        return None
+    _title, summary, severity = projection
+    return {
+        "event_type": INSTITUTION_TIMELINE_EVENT_TYPES.get(event.event_type, "APPLICATION_UPDATE"),
+        "from_stage": event.from_stage if event.event_type == "STAGE_TRANSITION" else None,
+        "to_stage": event.to_stage if event.event_type == "STAGE_TRANSITION" else None,
+        "summary": summary,
+        "severity": severity,
+    }
 
 
 def notify_case_participants(
@@ -551,8 +619,14 @@ def case_access_context(
                 role_match = role_match or handoff_access
             elif context.role_code == "EVC_COORDINATOR":
                 handoff_access = (
-                    case.current_stage == "EVC_COMPLETED"
-                    and (case.route_snapshot or {}).get("requires_committee") is False
+                    (
+                        case.current_stage == "EVC_COMPLETED"
+                        and (case.route_snapshot or {}).get("requires_committee") is False
+                    )
+                    or (
+                        case.current_stage == "EVC_SCHEDULED"
+                        and (case.route_snapshot or {}).get("requires_evc") is True
+                    )
                 )
                 role_match = role_match or handoff_access
             if not role_match:

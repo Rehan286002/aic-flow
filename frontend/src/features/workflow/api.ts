@@ -29,7 +29,7 @@ export interface WorkflowEvent {
   to_stage: string | null;
   summary: string;
   event_payload: Record<string, unknown>;
-  actor_user_id: string;
+  actor_user_id: string | null;
   occurred_at: string;
 }
 

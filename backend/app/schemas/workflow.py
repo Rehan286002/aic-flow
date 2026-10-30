@@ -41,7 +41,7 @@ class WorkflowEventResponse(BaseModel):
     to_stage: str | None = None
     summary: str
     event_payload: dict[str, Any]
-    actor_user_id: uuid.UUID
+    actor_user_id: uuid.UUID | None = None
     occurred_at: datetime
 
 

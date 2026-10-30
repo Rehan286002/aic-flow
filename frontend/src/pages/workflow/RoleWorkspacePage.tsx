@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
@@ -26,6 +26,7 @@ import { documentsApi } from '@/features/documents/api';
 import type { ApplicationRequirementItem } from '@/types/application';
 import type { DocumentUploadResponse } from '@/types/document';
 import { Badge } from '@/components/ui/badge';
+import { countWorkflowCasesDueWithinSevenDays, filterWorkflowCases, workflowApplicationLinkPath, type WorkflowCaseQuickFilter } from '@/features/workflow/filters';
 import { useAuth } from '@/hooks/useAuth';
 import {
   workflowApi,
@@ -41,27 +42,61 @@ type Workspace = 'institution' | 'auditor' | 'regional' | 'committee' | 'lead' |
 const LABELS: Record<string, string> = {
   DRAFT: 'Draft',
   SUBMITTED: 'Submitted',
-  INTAKE_REVIEW: 'Intake review',
-  SCRUTINY: 'Scrutiny',
+  INTAKE_REVIEW: 'Initial checks',
+  SCRUTINY: 'Application review',
   CLARIFICATION_REQUESTED: 'Clarification requested',
-  RESUBMITTED: 'Resubmitted',
-  EVC_COORDINATION: 'EVC coordination',
+  RESUBMITTED: 'Updated application submitted',
+  EVC_COORDINATION: 'Visit coordination',
   EVC_SCHEDULED: 'EVC scheduled',
   EVC_COMPLETED: 'EVC completed',
-  COMMITTEE_PROCEEDINGS: 'Committee proceedings',
-  AWAITING_AUTHORITY: 'Awaiting competent authority',
+  COMMITTEE_PROCEEDINGS: 'Committee review',
+  AWAITING_AUTHORITY: 'Awaiting decision',
   APPROVED: 'Approved',
   APPROVED_WITH_CONDITIONS: 'Approved with conditions',
   REJECTED: 'Rejected',
   ON_HOLD: 'On hold',
-  OBLIGATION_TRACKING: 'Obligation tracking',
+  OBLIGATION_TRACKING: 'Conditions follow-up',
+  APPLICATION_STATUS_UPDATED: 'Application status updated',
+  COMPLIANCE_REMINDER: 'Compliance reminder',
+  DOCUMENT_EXPIRY_REMINDER: 'Document expiry reminder',
+  DOCUMENT_VALIDITY_SUBMITTED: 'Document validity submitted',
+  DOCUMENT_VALIDITY_REVIEWED: 'Document validity reviewed',
+  OBLIGATION_CREATED: 'New approval condition',
+  OBLIGATION_EVIDENCE_SUBMITTED: 'Condition evidence submitted',
+  OBLIGATION_EVIDENCE_UNDER_REVIEW: 'Condition evidence under review',
+  OBLIGATION_EVIDENCE_VERIFIED: 'Condition evidence verified',
+  OBLIGATION_EVIDENCE_RETURNED: 'Condition evidence needs correction',
+  OBLIGATION_COMPLETED: 'Condition completed',
   CLOSED: 'Closed',
   OPEN: 'Open',
   EVIDENCE_SUBMITTED: 'Evidence submitted',
   UNDER_VERIFICATION: 'Under verification',
   RETURNED: 'Returned',
   VERIFIED: 'Verified',
+  APPLICATION_STATUS_UPDATED: 'Application status updated',
+  COMPLIANCE_REMINDER: 'Compliance reminder',
+  DOCUMENT_EXPIRY_REMINDER: 'Document expiry reminder',
+  DOCUMENT_VALIDITY_SUBMITTED: 'Document validity submitted',
+  DOCUMENT_VALIDITY_REVIEWED: 'Document validity reviewed',
+  OBLIGATION_CREATED: 'New approval condition',
+  OBLIGATION_EVIDENCE_SUBMITTED: 'Condition evidence submitted',
+  OBLIGATION_EVIDENCE_UNDER_REVIEW: 'Condition evidence under review',
+  OBLIGATION_EVIDENCE_VERIFIED: 'Condition evidence verified',
+  OBLIGATION_EVIDENCE_RETURNED: 'Condition evidence needs correction',
+  OBLIGATION_COMPLETED: 'Condition completed',
 };
+
+const ACTION_LABELS: Record<string, string> = {
+  SUBMITTED: 'Submit application',
+  INTAKE_REVIEW: 'Start initial checks',
+  SCRUTINY: 'Start application review',
+  CLARIFICATION_REQUESTED: 'Request clarification',
+  RESUBMITTED: 'Submit updated application',
+  AWAITING_AUTHORITY: 'Send for decision',
+  CLOSED: 'Close application',
+};
+
+const actionLabel = (stage: string) => ACTION_LABELS[stage] || label(stage);
 
 const label = (value?: string | null) => value ? (LABELS[value] || value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (part) => part.toUpperCase())) : '—';
 const date = (value?: string | null) => value ? new Date(value).toLocaleDateString() : 'Not set';
@@ -69,35 +104,35 @@ const isOverdue = (value?: string | null) => Boolean(value && new Date(value).ge
 const isClosedStage = (stage: string) => ['CLOSED', 'APPROVED', 'REJECTED'].includes(stage);
 
 const PAGE_META: Record<string, { title: string; description: string }> = {
-  overview: { title: 'Workspace overview', description: 'A scoped operational view of the approval and compliance work assigned to this account.' },
-  intake: { title: 'Application intake', description: 'Receive submitted applications, check intake readiness and hand off to the configured processing role.' },
-  queue: { title: 'Work queue', description: 'Work only on cases returned by the authorised institution, team and assignment scope.' },
-  scrutiny: { title: 'Scrutiny workbench', description: 'Review the submitted revision, evidence checklist, route snapshot and recorded case history.' },
-  clarification: { title: 'Clarification requests', description: 'Track cases awaiting institution responses and the specific correction cycle.' },
-  're-scrutiny': { title: 'Re-scrutiny queue', description: 'Review the latest resubmission without overwriting the previous application revision.' },
-  dossiers: { title: 'Case dossiers', description: 'Open the route, stage events, evidence requirements and outstanding obligations for a case.' },
-  reports: { title: 'Processing reports', description: 'Export a report from the cases currently returned by your authorised backend scope.' },
-  evc: { title: 'EVC coordination queue', description: 'Schedule route-eligible visits, record visit completion and follow up the report separately.' },
-  calendar: { title: 'EVC schedule register', description: 'Review proposed or confirmed dates recorded in the workflow event history.' },
-  overdue: { title: 'Overdue work', description: 'Identify cases and obligations past their recorded due dates; review the underlying record before acting.' },
-  assigned: { title: 'Assigned proceedings', description: 'Open only proceedings available inside the active committee assignment scope.' },
-  schedule: { title: 'Proceeding schedule', description: 'Record the schedule against the specific authorised proceeding type and case.' },
-  materials: { title: 'Case materials', description: 'Review the selected case dossier and the evidence already linked to its application.' },
-  observations: { title: 'Observations and reports', description: 'Record proceeding notes and minutes as append-only case events.' },
-  completion: { title: 'Proceeding completion', description: 'Complete the proceeding record only after its configured requirements are present.' },
-  regions: { title: 'Region and review-team comparison', description: 'Compare case ageing, EVC work, overdue items and obligations across authorised review-team scopes. Official region grouping requires an approved region master.' },
-  workload: { title: 'Officer workload', description: 'Review pending stages and their current assigned role or officer.' },
-  escalations: { title: 'Overdue and escalation dossiers', description: 'Review overdue triggers and record a supervisory acknowledgement or resolution.' },
-  decisions: { title: 'Competent authority decision queue', description: 'Present cases awaiting an authorised decision; the platform never determines the outcome.' },
-  analytics: { title: 'Operational analytics', description: 'Inspect stage counts and export the current scoped dataset without unsupported performance claims.' },
-  obligations: { title: 'Institutional obligations', description: 'Track conditions, evidence submissions and authorised verification after the application-stage decision.' },
-  renewals: { title: 'Documents and renewals', description: 'Record validity dates, renewal submissions and officer confirmation in the case audit timeline.' },
-  notifications: { title: 'Notification centre', description: 'Read persistent in-app notifications delivered to this authenticated account.' },
-  history: { title: 'Application history', description: 'Review the append-only timeline for a selected application.' },
-  'route-simulator': { title: 'Category route simulator', description: 'Preview only the route profiles currently configured in this repository. This does not publish policy or change a case.' },
-  sources: { title: 'Regulatory source register', description: 'Review the currently referenced regulatory baseline and the need to verify amendments before activation.' },
-  deadlines: { title: 'Deadline policy register', description: 'Separate source-backed deadlines from internal service targets and reminder windows.' },
-  'notification-policies': { title: 'Notification policy register', description: 'Review the policy boundary for reminders, deduplication and escalation; no unconfigured policy is implied to be active.' },
+  overview: { title: 'Your work overview', description: 'See the applications, upcoming work and updates linked to your role.' },
+  intake: { title: 'New applications', description: 'Check newly submitted applications and send complete applications to the review team.' },
+  queue: { title: 'Your work queue', description: 'See applications waiting for action from your role.' },
+  scrutiny: { title: 'Application review', description: 'Check the latest application details and supporting documents. Record any missing or incorrect information.' },
+  clarification: { title: 'Waiting for institution response', description: 'See which applications are waiting for an institution to submit corrections or missing documents.' },
+  're-scrutiny': { title: 'Updated applications', description: 'Review the corrected documents and information submitted by an institution.' },
+  dossiers: { title: 'Application details', description: 'Open an application to see its documents, current status, actions and previous updates.' },
+  reports: { title: 'Work reports', description: 'Download a list of the applications and work currently available to your role.' },
+  evc: { title: 'Visits to arrange', description: 'Arrange visits for applications that require an EVC and record the visit details.' },
+  calendar: { title: 'Visit schedule', description: 'Review proposed visit dates and the applications awaiting a visit report.' },
+  overdue: { title: 'Overdue work', description: 'See applications and conditions that have passed their recorded due date.' },
+  assigned: { title: 'Your assigned activities', description: 'Open the visits or proceedings assigned to your role.' },
+  schedule: { title: 'Proceeding schedule', description: 'Review the schedule details for the selected proceeding.' },
+  materials: { title: 'Application documents', description: 'Review the application documents shared for this visit or proceeding.' },
+  observations: { title: 'Observations and meeting notes', description: 'Record the observations and minutes from the proceeding.' },
+  completion: { title: 'Complete the proceeding', description: 'Save the required observations and meeting record before referring the application onward.' },
+  regions: { title: 'Team workload comparison', description: 'Compare active applications, overdue work, visits and conditions across the teams you oversee.' },
+  workload: { title: 'Workload by role', description: 'See how many active applications are waiting at each processing role.' },
+  escalations: { title: 'Overdue applications', description: 'Review delayed work, record what action was taken and follow up unresolved items.' },
+  decisions: { title: 'Applications awaiting your decision', description: 'Review the completed case record and enter the decision stated in the authorised order.' },
+  analytics: { title: 'Progress and reports', description: 'Review application progress and download the current work and compliance reports.' },
+  obligations: { title: 'Conditions and undertakings', description: 'Review the conditions recorded in the approval order and the evidence submitted against them.' },
+  renewals: { title: 'Documents and renewals', description: 'Submit document validity details and review replacement documents and officer decisions.' },
+  notifications: { title: 'Updates and reminders', description: 'See application updates, deadlines and items that need your attention.' },
+  history: { title: 'Application updates', description: 'See the status changes and messages recorded for the selected application.' },
+  'route-simulator': { title: 'Application path preview', description: 'Preview the processing steps currently configured for each application type. This does not change an application.' },
+  sources: { title: 'Reference documents', description: 'Review the official documents and updates used when configuring application processing.' },
+  deadlines: { title: 'Due-date rules', description: 'Review which dates come from official orders and which are internal processing reminders.' },
+  'notification-policies': { title: 'Reminder settings', description: 'Review who receives reminders and when delayed work is brought to a supervisor.' },
 };
 
 const STAGE_GROUPS: Record<Workspace, string[]> = {
@@ -116,6 +151,10 @@ interface Props {
 
 export default function RoleWorkspacePage({ workspace, section: explicitSection }: Props) {
   const params = useParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const notificationApplicationId = searchParams.get('applicationId');
+  const consumedNotificationApplicationId = useRef<string | null>(null);
   const section = explicitSection || params.section || 'overview';
   const auth = useAuth();
   const role = auth.activeContext?.role_code || '';
@@ -130,8 +169,10 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
   const [pendingObligationId, setPendingObligationId] = useState<string | null>(null);
   const [selected, setSelected] = useState<WorkflowDetail | null>(null);
   const [search, setSearch] = useState('');
+  const [caseQuickFilter, setCaseQuickFilter] = useState<WorkflowCaseQuickFilter>('ALL');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [hasLoadedCases, setHasLoadedCases] = useState(false);
   const [error, setError] = useState('');
   const [evcDate, setEvcDate] = useState('');
   const [evcMode, setEvcMode] = useState('PHYSICAL');
@@ -175,15 +216,18 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
       setError(err instanceof Error ? err.message : 'Unable to load records from the approval workflow API.');
     } finally {
       setBusy(false);
+      setHasLoadedCases(true);
     }
   }, [canLoadCases]);
 
   useEffect(() => { void refresh(); }, [refresh, role]);
+  useEffect(() => { setCaseQuickFilter('ALL'); }, [section]);
 
   const visibleCases = useMemo(() => {
     let rows = cases;
     if (workspace === 'auditor' && section === 'intake') rows = rows.filter((item) => item.current_stage === 'SUBMITTED');
     if (workspace === 'auditor' && section === 'clarification') rows = rows.filter((item) => item.current_stage === 'CLARIFICATION_REQUESTED');
+    if (workspace === 'institution' && section === 'clarification') rows = rows.filter((item) => item.current_stage === 'CLARIFICATION_REQUESTED');
     if (workspace === 'auditor' && section === 're-scrutiny') rows = rows.filter((item) => item.current_stage === 'RESUBMITTED');
     if (workspace === 'auditor' && section === 'scrutiny') rows = rows.filter((item) => ['INTAKE_REVIEW', 'SCRUTINY'].includes(item.current_stage));
     if (workspace === 'regional' && ['evc', 'calendar'].includes(section)) rows = rows.filter((item) => STAGE_GROUPS.regional.includes(item.current_stage));
@@ -193,10 +237,10 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     if (workspace === 'lead' && section === 'workload') rows = rows.filter((item) => !isClosedStage(item.current_stage));
     if (search.trim()) {
       const query = search.trim().toLowerCase();
-      rows = rows.filter((item) => [item.application_number, item.institution_name, item.process_type, item.current_stage].some((value) => value.toLowerCase().includes(query)));
+      rows = rows.filter((item) => [item.application_number, item.institution_name, item.review_team_name || '', item.process_type, item.current_stage].some((value) => value.toLowerCase().includes(query)));
     }
     return rows;
-  }, [cases, workspace, section, search]);
+  }, [cases, workspace, section, search, role]);
 
   const visibleObligations = useMemo(() => {
     let rows = obligations;
@@ -208,17 +252,29 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     return rows;
   }, [obligations, workspace, section, search]);
 
-  const openCase = async (item: WorkflowCase) => {
+  const openCase = useCallback(async (item: WorkflowCase) => {
     setBusy(true);
     try {
       setSelected(await workflowApi.detail(item.workflow_case_id));
       setNote('');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to open case dossier.');
+      toast.error(err instanceof Error ? err.message : 'Unable to open application details.');
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationApplicationId || busy || !hasLoadedCases || consumedNotificationApplicationId.current === notificationApplicationId) return;
+    consumedNotificationApplicationId.current = notificationApplicationId;
+    const match = cases.find((item) => item.application_id === notificationApplicationId);
+    setSearchParams({}, { replace: true });
+    if (!match) {
+      toast.error('This application is not available in your current role or team.');
+      return;
+    }
+    void openCase(match);
+  }, [notificationApplicationId, cases, busy, hasLoadedCases, setSearchParams, openCase]);
 
   const transition = async (target: string, reasonOverride?: string) => {
     const reason = (reasonOverride || note).trim();
@@ -359,7 +415,7 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     }
     const requirement = chooseUploadRequirement(selected, validityType);
     if (!requirement) {
-      toast.error('This application has no matching document slot. Open the Document Centre and use an applicable requirement; the system will not attach a lease file to an unrelated checklist item.');
+      toast.error('This application does not have a matching required document. Check the application checklist before adding validity dates; the system will not attach a file to an unrelated requirement.');
       return;
     }
     setUploadPurpose('VALIDITY');
@@ -380,7 +436,7 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
             ? 'BUILDING_DOCUMENT'
             : null;
       if (!expectedDocumentType) {
-        toast.error('This condition does not map to a configured document requirement. Open the Document Centre and request an authorised document slot; no unrelated checklist item will be used.');
+        toast.error('This condition does not match a document already listed on the application. Ask the processing team to add the correct requirement before submitting evidence.');
         return;
       }
       const requirement = chooseUploadRequirement(detail, expectedDocumentType);
@@ -733,6 +789,39 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
   const noCaseSections = ['notifications', 'obligations'];
   const showCaseQueue = !noCaseSections.includes(section);
   const caseList = showCaseQueue ? visibleCases : [];
+  const nowMs = Date.now();
+  const overdueQueueCount = caseList.filter((item) => isOverdue(item.due_at) && !isClosedStage(item.current_stage)).length;
+  const dueSoonQueueCount = countWorkflowCasesDueWithinSevenDays(caseList, nowMs);
+  const filteredCaseList = filterWorkflowCases(caseList, caseQuickFilter, nowMs);
+  const groupedTeams = new Map<string, { id: string; name: string; applications: WorkflowCase[] }>();
+  for (const item of cases) {
+    const id = item.review_team_id || 'unassigned';
+    const name = item.review_team_name || 'Unassigned team';
+    const group = groupedTeams.get(id) || { id, name, applications: [] };
+    group.applications.push(item);
+    groupedTeams.set(id, group);
+  }
+  const teamSummaries = Array.from(groupedTeams.values()).map((team) => {
+    const ids = new Set(team.applications.map((item) => item.workflow_case_id));
+    const linkedObligations = obligations.filter((item) => ids.has(item.workflow_case_id));
+    return {
+      ...team,
+      active: team.applications.filter((item) => !isClosedStage(item.current_stage)).length,
+      overdue: team.applications.filter((item) => isOverdue(item.due_at) && !isClosedStage(item.current_stage)).length
+        + linkedObligations.filter((item) => isOverdue(item.due_at) && !['CLOSED', 'VERIFIED'].includes(item.status)).length,
+      evc: team.applications.filter((item) => ['EVC_COORDINATION', 'EVC_SCHEDULED', 'EVC_COMPLETED'].includes(item.current_stage)).length,
+      authority: team.applications.filter((item) => item.current_stage === 'AWAITING_AUTHORITY').length,
+      obligations: linkedObligations.length,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  const roleWorkloadCounts = new Map<string, number>();
+  for (const item of cases.filter((entry) => !isClosedStage(entry.current_stage))) {
+    const key = item.assigned_role_code || 'UNASSIGNED';
+    roleWorkloadCounts.set(key, (roleWorkloadCounts.get(key) || 0) + 1);
+  }
+  const roleWorkload = Array.from(roleWorkloadCounts.entries())
+    .map(([roleCode, count]) => ({ roleCode, count }))
+    .sort((a, b) => b.count - a.count || a.roleCode.localeCompare(b.roleCode));
   const selectedObligations = selected ? selected.obligations : [];
   const pendingEvc = selected && selected.current_stage === 'EVC_COORDINATION';
   const pendingEvcReport = selected && selected.current_stage === 'EVC_SCHEDULED';
@@ -746,6 +835,61 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((item) => <Metric key={item.label} label={item.label} value={item.value} icon={item.icon} />)}
       </div>
+
+      {workspace === 'lead' && section === 'regions' ? (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+            <div>
+              <h2 className="font-semibold text-slate-900">Team workload comparison</h2>
+              <p className="mt-1 text-xs text-slate-500">Compare the applications and follow-up work in the review teams you oversee.</p>
+            </div>
+            <Badge variant="secondary">{teamSummaries.length} teams</Badge>
+          </div>
+          {teamSummaries.length === 0 ? (
+            <Empty title="No team activity to compare" description="Team summaries appear when applications are assigned to your review teams."/>
+          ) : (
+            <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+              {teamSummaries.map((team) => (
+                <button key={team.id} type="button" onClick={() => setSearch(team.name)} className="min-w-0 rounded-lg border border-slate-200 p-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/30">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="break-words text-sm font-semibold text-slate-900">{team.name}</span>
+                    <Badge variant="secondary">{team.applications.length} applications</Badge>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-md bg-slate-50 p-2"><span className="text-slate-500">Active</span><div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{team.active}</div></div>
+                    <div className="rounded-md bg-slate-50 p-2"><span className="text-slate-500">Overdue</span><div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{team.overdue}</div></div>
+                    <div className="rounded-md bg-slate-50 p-2"><span className="text-slate-500">EVC visits</span><div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{team.evc}</div></div>
+                    <div className="rounded-md bg-slate-50 p-2"><span className="text-slate-500">Awaiting decision</span><div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{team.authority}</div></div>
+                  </div>
+                  <div className="mt-3 text-xs text-indigo-700">{team.obligations} linked conditions · Select to view applications</div>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500">Demo team names are fictional review groups, not official AICTE regions.</div>
+        </section>
+      ) : null}
+
+      {workspace === 'lead' && section === 'workload' ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div><h2 className="font-semibold text-slate-900">Active applications by role</h2><p className="mt-1 text-xs text-slate-500">Counts are based on the current applications assigned to your teams.</p></div>
+            <Badge variant="secondary">{roleWorkload.reduce((sum, item) => sum + item.count, 0)} active</Badge>
+          </div>
+          {roleWorkload.length === 0 ? <Empty title="No active applications" description="There are no active applications in the current team scope."/> : (
+            <div className="mt-4 space-y-3">
+              {roleWorkload.map((item) => {
+                const total = Math.max(1, roleWorkload.reduce((sum, value) => sum + value.count, 0));
+                const share = Math.round((item.count / total) * 100);
+                return <div key={item.roleCode}>
+                  <div className="mb-1 flex items-center justify-between gap-2 text-xs"><span className="font-medium text-slate-700">{label(item.roleCode)}</span><span className="tabular-nums text-slate-500">{item.count}</span></div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-500" style={{ width: share + '%' }}/></div>
+                </div>;
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{error}</div>}
 
@@ -763,7 +907,13 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
               <Button size="sm" variant="outline" disabled={busy || unreadCount === 0} onClick={() => void markAllNotificationsRead()}>Mark all read</Button>
             </div>
           </div>
-          {filteredNotifications.length === 0 ? <Empty title="No notifications in this account" description="Notifications appear when a scoped workflow event has a recipient match."/> : <div className="divide-y divide-slate-100">{filteredNotifications.map((item) => <div key={item.notification_id} className="flex flex-wrap items-start justify-between gap-3 p-4"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-sm text-slate-900">{item.title}</span>{item.severity === 'WARNING' ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">Action required</Badge> : <Badge variant="secondary">Information</Badge>}{!item.read_at && <Badge variant="outline">Unread</Badge>}</div><p className="mt-1 text-sm text-slate-600">{item.body}</p><p className="mt-1 text-xs text-slate-400">{new Date(item.created_at).toLocaleString()}</p></div>{!item.read_at && <Button size="sm" variant="outline" onClick={() => void markNotificationRead(item.notification_id)}>Mark read</Button>}</div>)}</div>}
+          {filteredNotifications.length === 0 ? <Empty title="No notifications in this account" description="Notifications appear when a scoped workflow event has a recipient match."/> : <div className="divide-y divide-slate-100">{filteredNotifications.map((item) => <div key={item.notification_id} className="flex flex-wrap items-start justify-between gap-3 p-4"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-sm text-slate-900">{item.title}</span>{item.severity === 'WARNING' ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">Action required</Badge> : <Badge variant="secondary">Information</Badge>}{!item.read_at && <Badge variant="outline">Unread</Badge>}</div><p className="mt-1 text-sm text-slate-600">{item.body}</p><p className="mt-1 text-xs text-slate-400">{new Date(item.created_at).toLocaleString()}</p></div><div className="flex flex-wrap items-center gap-2">
+                    {item.application_id && <Button size="sm" variant="outline" onClick={() => {
+                      if (!item.read_at) void markNotificationRead(item.notification_id);
+                      navigate(workflowApplicationLinkPath(workspace) + '?applicationId=' + encodeURIComponent(item.application_id!));
+                    }}>Open application</Button>}
+                    {!item.read_at && <Button size="sm" variant="ghost" onClick={() => void markNotificationRead(item.notification_id)}>Mark read</Button>}
+                  </div></div>)}</div>}
         </section>
       ) : null}
 
@@ -858,31 +1008,57 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
         <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.82fr)_minmax(0,1.18fr)]">
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-4">
-              <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-slate-900">{section === 'evc' ? 'EVC eligible / active cases' : section === 'decisions' ? 'Awaiting authority' : section === 'escalations' ? 'Overdue application stages' : section === 'assigned' ? 'Assigned proceedings' : 'Applications in scope'}</h2><Badge variant="secondary">{caseList.length}</Badge></div>
-              <div className="relative mt-3"><Search className="absolute left-3 top-2.5 size-4 text-slate-400"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reference, institution or stage" className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"/></div>
+              <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-slate-900">{section === 'evc' ? 'EVC eligible / active cases' : section === 'decisions' ? 'Awaiting authority' : section === 'escalations' ? 'Overdue application stages' : section === 'assigned' ? 'Assigned proceedings' : 'Applications in scope'}</h2><Badge variant="secondary">{filteredCaseList.length}</Badge></div>
+              <div className="relative mt-3"><Search className="absolute left-3 top-2.5 size-4 text-slate-400"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search application number, institution or status" aria-label="Search applications" className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"/></div>
+              <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Filter applications">
+                <Button size="xs" variant={caseQuickFilter === 'ALL' ? 'secondary' : 'outline'} onClick={() => setCaseQuickFilter('ALL')}>All ({caseList.length})</Button>
+                <Button size="xs" variant={caseQuickFilter === 'DUE_SOON' ? 'secondary' : 'outline'} onClick={() => setCaseQuickFilter('DUE_SOON')}>Due in 7 days ({dueSoonQueueCount})</Button>
+                <Button size="xs" variant={caseQuickFilter === 'OVERDUE' ? 'secondary' : 'outline'} onClick={() => setCaseQuickFilter('OVERDUE')}>Overdue ({overdueQueueCount})</Button>
+                {workspace === 'institution' && <Button size="xs" variant={caseQuickFilter === 'MY_ACTIONS' ? 'secondary' : 'outline'} onClick={() => setCaseQuickFilter('MY_ACTIONS')}>Needs your response</Button>}
+                {workspace === 'lead' && <Button size="xs" variant={caseQuickFilter === 'UNASSIGNED' ? 'secondary' : 'outline'} onClick={() => setCaseQuickFilter('UNASSIGNED')}>Unassigned</Button>}
+                {(search || caseQuickFilter !== 'ALL') && <Button size="xs" variant="ghost" onClick={() => { setSearch(''); setCaseQuickFilter('ALL'); }}>Clear filters</Button>}
+              </div>
             </div>
-            {caseList.length === 0 ? <Empty title="No cases match this view" description="The queue is based on the current authenticated role, institution/team scope and backend case states. It does not insert sample cases into live records."/> : <div className="max-h-[760px] divide-y divide-slate-100 overflow-auto">{caseList.map((item) => <button key={item.workflow_case_id} type="button" onClick={() => void openCase(item)} className={'block w-full px-4 py-3 text-left transition hover:bg-slate-50 ' + (selected?.workflow_case_id === item.workflow_case_id ? 'bg-indigo-50/70' : '')}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-slate-900">{item.application_number}</span><Status value={item.current_stage}/></div><div className="mt-1 text-xs text-slate-600">{item.institution_name}</div><div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400"><span>{label(item.process_type)}</span><span>AY {item.academic_year}</span><span>Due: {date(item.due_at)}</span></div><div className="mt-1 text-[11px] text-slate-500">Owner role: {label(item.assigned_role_code)}</div></button>)}</div>}
+            {filteredCaseList.length === 0 ? <Empty title="No applications match these filters" description="Try another filter or clear your search to see the rest of your applications."/> : <div className="max-h-[760px] divide-y divide-slate-100 overflow-auto">{filteredCaseList.map((item) => <button key={item.workflow_case_id} type="button" onClick={() => void openCase(item)} className={'block w-full px-4 py-3 text-left transition hover:bg-slate-50 ' + (selected?.workflow_case_id === item.workflow_case_id ? 'bg-indigo-50/70' : '')}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-slate-900">{item.application_number}</span><Status value={item.current_stage}/></div><div className="mt-1 text-xs text-slate-600">{item.institution_name}</div><div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400"><span>{label(item.process_type)}</span><span>AY {item.academic_year}</span><span>Due: {date(item.due_at)}</span></div>{workspace !== 'institution' && <div className="mt-1 text-[11px] text-slate-500">Assigned role: {label(item.assigned_role_code)}</div>}
+                  {workspace === 'lead' && item.review_team_name && <div className="mt-1 text-[11px] text-indigo-700">{item.review_team_name}</div>}</button>)}</div>}
           </section>
 
           <section className="space-y-4">
             {selected ? (
               <>
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Application dossier</div><h2 className="mt-1 text-lg font-bold text-slate-900">{selected.application_number}</h2><p className="text-sm text-slate-600">{selected.institution_name} · {label(selected.process_type)}</p></div><Status value={selected.current_stage}/></div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Pinned route</span><div className="mt-1 font-semibold text-slate-800">{selected.route_code}</div></div><div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Regulatory baseline</span><div className="mt-1 font-semibold text-slate-800">{selected.regulatory_version}</div></div></div>
-                  {selected.route_snapshot.route_status === 'MANUAL_CONFIRMATION_REQUIRED' && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">This category has no approved route profile. The workflow is held for authorised policy confirmation; no default route is guessed.</div>}
-                  {selected.route_snapshot.requires_committee === null && selected.route_snapshot.requires_evc === true && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">EVC is configured, but SAC/SHC applicability remains unresolved. This case must not enter a proceeding or authority gate until the trigger is confirmed.</div>}
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3 text-xs"><div><span className="text-slate-500">Stage entered</span><p className="mt-0.5 font-medium text-slate-800">{new Date(selected.stage_entered_at).toLocaleString()}</p></div><div><span className="text-slate-500">Due date</span><p className={'mt-0.5 font-medium ' + (isOverdue(selected.due_at) ? 'text-red-700' : 'text-slate-800')}>{date(selected.due_at)}</p></div><div><span className="text-slate-500">Assigned role</span><p className="mt-0.5 font-medium text-slate-800">{label(selected.assigned_role_code)}</p></div></div>
-                  <div className="mt-4"><label className="mb-1.5 block text-xs font-semibold text-slate-700">Reason / action note</label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Explain the action or recorded observation..." className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"/></div>
-                  <div className="mt-3 flex flex-wrap gap-2">{allowedTransitions(selected).map((target) => <Button key={target} size="sm" disabled={busy || note.trim().length < 8} onClick={() => void transition(target)}>{label(target)}</Button>)}</div>
-                  {workspace === 'institution' && ['DRAFT', 'CLARIFICATION_REQUESTED'].includes(selected.current_stage) && <div className="mt-3 flex flex-wrap gap-3 text-sm"><Link className="text-indigo-700 underline" to="/institution/applications/new">Create another application</Link><Link className="text-indigo-700 underline" to="/institution/rectification">Open clarification response</Link><Link className="text-indigo-700 underline" to="/institution/documents">Open Document Centre</Link></div>}
+                  <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">{workspace === 'institution' ? 'Application details' : workspace === 'committee' ? 'Proceeding details' : 'Case details'}</div><h2 className="mt-1 text-lg font-bold text-slate-900">{selected.application_number}</h2><p className="text-sm text-slate-600">{selected.institution_name} · {label(selected.process_type)}</p></div><Status value={selected.current_stage}/></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Application type</span><div className="mt-1 font-semibold text-slate-800">{label(selected.process_type)}</div></div><div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Academic year</span><div className="mt-1 font-semibold text-slate-800">{selected.academic_year}</div></div></div>
+                  {selected.route_snapshot.route_status === 'MANUAL_CONFIRMATION_REQUIRED' && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">This application type needs an approved processing path before it can move forward. A policy officer must confirm the next steps.</div>}
+                  {selected.route_snapshot.requires_committee === null && selected.route_snapshot.requires_evc === true && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">An EVC visit is required, but any further committee step still needs confirmation. The application will be held until the correct next step is confirmed.</div>}
+                  {workspace === 'institution' ? (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 text-xs">
+                      <div><span className="text-slate-500">Last updated</span><p className="mt-0.5 font-medium text-slate-800">{new Date(selected.updated_at).toLocaleString()}</p></div>
+                      <div><span className="text-slate-500">Next due date</span><p className={'mt-0.5 font-medium ' + (isOverdue(selected.due_at) ? 'text-red-700' : 'text-slate-800')}>{date(selected.due_at)}</p></div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3 text-xs">
+                      <div><span className="text-slate-500">Stage entered</span><p className="mt-0.5 font-medium text-slate-800">{new Date(selected.stage_entered_at).toLocaleString()}</p></div>
+                      <div><span className="text-slate-500">Due date</span><p className={'mt-0.5 font-medium ' + (isOverdue(selected.due_at) ? 'text-red-700' : 'text-slate-800')}>{date(selected.due_at)}</p></div>
+                      <div><span className="text-slate-500">Assigned role</span><p className="mt-0.5 font-medium text-slate-800">{label(selected.assigned_role_code)}</p></div>
+                    </div>
+                  )}
+                  <div className="mt-4"><label className="mb-1.5 block text-xs font-semibold text-slate-700">{workspace === 'institution' ? 'Submission note' : 'Reason for this action'}</label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder={workspace === 'institution' ? 'Add a note for the processing team...' : 'Explain the action or observation...'} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"/></div>
+                  <div className="mt-3 flex flex-wrap gap-2">{allowedTransitions(selected).map((target) => <Button key={target} size="sm" disabled={busy || note.trim().length < 8} onClick={() => void transition(target)}>{actionLabel(target)}</Button>)}</div>
+                  {workspace === 'institution' && ['DRAFT', 'CLARIFICATION_REQUESTED'].includes(selected.current_stage) && <div className="mt-3 flex flex-wrap gap-3 text-sm"><Link className="text-indigo-700 underline" to="/institution/overview">Open current application checklist</Link><Link className="text-indigo-700 underline" to="/institution/rectification">Open clarification queue</Link><Link className="text-indigo-700 underline" to="/institution/documents">Review document validity and renewals</Link></div>}
                 </div>
 
                 {pendingEvc && (role === 'EVC_COORDINATOR' || role === 'REGIONAL_OFFICER' || role === 'LEAD_AUDITOR') ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-900">Record EVC schedule</h3><p className="mt-1 text-xs text-slate-500">This records administrative scheduling metadata; it does not constitute official committee appointment.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><div><label className="mb-1 block text-xs font-medium">Proposed visit date</label><input type="date" value={evcDate} onChange={(event) => setEvcDate(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"/></div><div><label className="mb-1 block text-xs font-medium">Visit mode</label><select value={evcMode} onChange={(event) => setEvcMode(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"><option>PHYSICAL</option><option>ONLINE</option><option>HYBRID</option></select></div><div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium">Location / meeting details</label><input value={evcLocation} onChange={(event) => setEvcLocation(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm" placeholder="Location or approved meeting details"/></div></div><Button className="mt-3" size="sm" disabled={busy || !evcDate || !evcLocation.trim() || note.trim().length < 8} onClick={async () => { const saved = await recordEvent('EVC_VISIT_SCHEDULED', note, { visit_date: evcDate, visit_mode: evcMode, location: evcLocation.trim(), schedule_status: 'PROPOSED', coordination_only: true }); if (saved) await transition('EVC_SCHEDULED', 'EVC schedule recorded for ' + evcDate + '. ' + note); }}>Save schedule and move to scheduled</Button></div> : null}
 
                 {pendingEvcReport && (role === 'EVC_MEMBER' || role === 'EVC_COORDINATOR') ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-900">Visit completion and report</h3><p className="mt-1 text-xs text-slate-500">A completed visit and a received report are separate facts; record the report reference before completing this workflow stage.</p><input value={reportReference} onChange={(event) => setReportReference(event.target.value)} className="mt-3 h-9 w-full rounded-lg border px-3 text-sm" placeholder="Visit report reference / document ID"/><Button className="mt-3" size="sm" disabled={busy || !reportReference.trim() || note.trim().length < 8} onClick={async () => { const saved = await recordEvent('EVC_REPORT_RECORDED', note, { report_reference: reportReference.trim(), report_status: 'RECEIVED' }); if (saved) await transition('EVC_COMPLETED', 'EVC report recorded: ' + reportReference.trim() + '. ' + note); }}>Record report and complete EVC stage</Button></div> : null}
 
-                {pendingProceeding && role === 'COMMITTEE_SECRETARIAT' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-900">Proceeding record</h3><div className="mt-3"><label className="mb-1 block text-xs font-medium">Proceeding type</label><select value={proceedingType} onChange={(event) => setProceedingType(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"><option value="SHC">Standing Hearing Committee (SHC)</option><option value="SAC">Standing Appellate Committee (SAC)</option><option value="OTHER_AUTHORISED_PROCEEDING">Other authorised proceeding</option></select></div><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy || note.trim().length < 8} onClick={() => void recordEvent('COMMITTEE_CONVENED', note, { proceeding_type: proceedingType, record_status: 'CONVENED' })}>Record proceeding convened</Button><Button size="sm" disabled={busy || note.trim().length < 8} onClick={async () => { const saved = await recordEvent('COMMITTEE_MINUTES_RECORDED', note, { proceeding_type: proceedingType, minutes_reference: reportReference || null, outcome_type: 'OBSERVATION_OR_RECOMMENDATION' }); if (saved) await transition('AWAITING_AUTHORITY', 'Proceeding record completed; committee recommendation is recorded, not a statutory outcome. ' + note); }}>Record minutes and refer onward</Button></div><p className="mt-2 text-xs text-slate-500">SAC and SHC remain distinct. A committee recommendation is not automatically the statutory decision.</p></div> : null}
+                {pendingProceeding && role === 'COMMITTEE_SECRETARIAT' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-900">Proceeding record</h3><div className="mt-3"><label className="mb-1 block text-xs font-medium">Proceeding type</label><select value={proceedingType} onChange={(event) => setProceedingType(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"><option value="SHC">Standing Hearing Committee (SHC)</option><option value="SAC">Standing Appellate Committee (SAC)</option><option value="OTHER_AUTHORISED_PROCEEDING">Other authorised proceeding</option></select></div><div className="mt-3 flex flex-wrap gap-2">
+                    {!selected.events.some((event) => event.event_type === 'COMMITTEE_CONVENED') ? (
+                      <Button size="sm" disabled={busy || note.trim().length < 8} onClick={() => void recordEvent('COMMITTEE_CONVENED', note, { proceeding_type: proceedingType, record_status: 'CONVENED' })}>Record meeting opened</Button>
+                    ) : (
+                      <Button size="sm" disabled={busy || note.trim().length < 8} onClick={async () => { const saved = await recordEvent('COMMITTEE_MINUTES_RECORDED', note, { proceeding_type: proceedingType, minutes_reference: reportReference || null, outcome_type: 'OBSERVATION_OR_RECOMMENDATION' }); if (saved) await transition('AWAITING_AUTHORITY', 'Proceeding record completed; committee recommendation is recorded, not a statutory outcome. ' + note); }}>Save minutes and send for decision</Button>
+                    )}
+                  </div><p className="mt-2 text-xs text-slate-500">SAC and SHC remain distinct. A committee recommendation is not automatically the statutory decision.</p></div> : null}
 
                 {role === 'COMPETENT_AUTHORITY' && selected.current_stage === 'AWAITING_AUTHORITY' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2"><Gavel className="size-4 text-indigo-600"/><h3 className="font-semibold text-slate-900">Competent authority decision</h3></div><p className="mt-1 text-xs text-slate-500">Only this explicitly authorised role can record the statutory outcome.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><div><label className="mb-1 block text-xs font-medium">Outcome</label><select value={decisionOutcome} onChange={(event) => setDecisionOutcome(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"><option value="APPROVED">Approved</option><option value="APPROVED_WITH_CONDITIONS">Approved with conditions</option><option value="REJECTED">Rejected</option><option value="ON_HOLD">On hold</option></select></div><div><label className="mb-1 block text-xs font-medium">Decision date</label><input type="date" value={decisionDate} onChange={(event) => setDecisionDate(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm"/></div><div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium">Official order / reference</label><input value={orderReference} onChange={(event) => setOrderReference(event.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm" placeholder="Enter authorised order reference"/></div></div><Button className="mt-3" size="sm" disabled={busy || note.trim().length < 8 || orderReference.trim().length < 3} onClick={() => void createDecision()}>Record authorised decision</Button></div> : null}
 
@@ -891,13 +1067,30 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
                 {section === 'escalations' && ['REGIONAL_OFFICER', 'BUREAU_SUPERVISOR', 'LEAD_AUDITOR'].includes(role) && isOverdue(selected.due_at) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h3 className="font-semibold text-amber-950">Overdue stage review</h3><p className="mt-1 text-xs text-amber-900">This is a due-date-based review signal, not an automatic penalty or statutory finding.</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy || note.trim().length < 8} onClick={() => void recordEvent('ESCALATION_ACKNOWLEDGED', note, { trigger_type: 'STAGE_OVERDUE', due_at: selected.due_at, escalation_level: 'SUPERVISORY_REVIEW' })}>Acknowledge escalation</Button><Button size="sm" disabled={busy || note.trim().length < 8} onClick={() => void recordEvent('ESCALATION_RESOLVED', note, { trigger_type: 'STAGE_OVERDUE', due_at: selected.due_at, resolution: 'MANUAL_SUPERVISORY_ACTION' })}>Record resolution</Button></div></div>}
 
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">Evidence checklist</h3><Badge variant="secondary">{selected.requirements.length} requirements</Badge></div>
-                  {selected.requirements.length === 0 ? <p className="mt-3 text-sm text-slate-500">No checklist items are linked to this workflow case.</p> : <div className="mt-3 divide-y divide-slate-100">{selected.requirements.map((item) => <div key={item.application_requirement_id} className="py-2"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-slate-800">{item.item_code} · {item.title}</span><Status value={item.status}/></div><p className="mt-1 text-xs text-slate-500">{label(item.applicability_status)}{item.determination_reason ? ' · ' + item.determination_reason : ''}</p></div>)}</div>}
+                  <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">{workspace === 'institution' ? 'Required documents' : 'Evidence checklist'}</h3><Badge variant="secondary">{selected.requirements.length} items</Badge></div>
+                  {selected.requirements.length === 0 ? <p className="mt-3 text-sm text-slate-500">No document requirements are linked to this application.</p> : <div className="mt-3 divide-y divide-slate-100">{selected.requirements.map((item) => <div key={item.application_requirement_id} className="py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-800">{workspace === 'institution' ? item.title : item.item_code + ' · ' + item.title}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Status value={item.status}/>
+                        {workspace === 'institution' && item.applicability_status === 'APPLICABLE' && item.status !== 'SATISFIED' && (
+                          <Button size="xs" variant="outline" disabled={busy} onClick={() => {
+                            setUploadPurpose(null);
+                            setPendingObligationId(null);
+                            setUploadRequirement(item);
+                            setUploadOpen(true);
+                          }}>Upload document</Button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{label(item.applicability_status)}{item.determination_reason ? ' · ' + item.determination_reason : ''}</p>
+                    {workspace === 'institution' && item.applicability_status === 'PENDING_DETERMINATION' && <p className="mt-1 text-[11px] text-amber-700">This requirement will become available for upload after its applicability is confirmed.</p>}
+                  </div>)}</div>}
                 </div>
 
                 {selectedObligations.length > 0 ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-900">Linked conditions and obligations</h3><div className="mt-3 divide-y divide-slate-100">{selectedObligations.map((item) => <div key={item.obligation_id} className="py-2"><div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-slate-800">{item.title}</span><Status value={item.status}/></div><p className="mt-1 text-xs text-slate-600">{item.description}</p><p className="mt-1 text-xs text-slate-400">Due {date(item.due_at)} · Source: {item.source_condition}</p></div>)}</div></div> : null}
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">Application audit timeline</h3><Badge variant="secondary">{selected.events.length} events</Badge></div>{selected.events.length === 0 ? <p className="mt-3 text-sm text-slate-500">No workflow events have been recorded yet.</p> : <div className="mt-3 space-y-3">{selected.events.map((event) => <div key={event.workflow_event_id} className="flex gap-3 text-xs"><div className="mt-1 size-2 rounded-full bg-indigo-500"/><div className="min-w-0 flex-1"><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold text-slate-800">{label(event.event_type)}</span><span className="text-slate-400">{new Date(event.occurred_at).toLocaleString()}</span></div><p className="mt-1 text-slate-600">{event.summary}</p>{Object.keys(event.event_payload || {}).length > 0 && <p className="mt-1 text-[11px] text-slate-400">Recorded metadata: {Object.entries(event.event_payload).map(([key, value]) => key + '=' + String(value)).join(' · ')}</p>}</div></div>)}</div>}</div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">{workspace === 'institution' ? 'Application updates' : 'Application activity'}</h3><Badge variant="secondary">{selected.events.length} events</Badge></div>{selected.events.length === 0 ? <p className="mt-3 text-sm text-slate-500">No workflow events have been recorded yet.</p> : <div className="mt-3 space-y-3">{selected.events.map((event) => <div key={event.workflow_event_id} className="flex gap-3 text-xs"><div className="mt-1 size-2 rounded-full bg-indigo-500"/><div className="min-w-0 flex-1"><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold text-slate-800">{label(event.event_type)}</span><span className="text-slate-400">{new Date(event.occurred_at).toLocaleString()}</span></div><p className="mt-1 text-slate-600">{event.summary}</p></div></div>)}</div>}</div>
               </>
             ) : <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center"><FileText className="mx-auto size-8 text-slate-300"/><p className="mt-2 text-sm font-semibold text-slate-700">Select a case to open its dossier</p><p className="mt-1 text-xs text-slate-500">Actions appear only when the selected case state and authenticated role permit them.</p></div>}
           </section>
@@ -924,7 +1117,7 @@ function PageHeading({ title, description, onRefresh, busy, onExport, showRefres
 }
 
 function SyntheticNotice() {
-  return <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs text-indigo-900"><span className="font-semibold">PROTOTYPE WORKSPACE</span><span>Use synthetic institution and application records for demonstrations. Live AICTE / external integration is not implied.</span></div>;
+  return <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs text-indigo-900"><span className="font-semibold">DEMO ENVIRONMENT</span><span>Sample applications are fictional. This workspace does not connect to live AICTE or external systems.</span></div>;
 }
 
 function Metric({ label: title, value, icon: Icon }: { label: string; value: number; icon: typeof Activity }) {

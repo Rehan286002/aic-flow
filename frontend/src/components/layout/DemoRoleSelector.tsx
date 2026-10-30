@@ -46,12 +46,24 @@ export function DemoRoleSelector() {
 
   const activeContext = auth.activeContext;
   const activeWorkspace = auth.activeWorkspace || 'auditor';
+  const getContextLabel = (context: typeof auth.roles[number]) => {
+    const sameRole = auth.roles.filter((item) => item.role_code === context.role_code);
+    const index = sameRole.findIndex((item) => getRoleContextKey(item) === getRoleContextKey(context));
+    const scopeLabel = sameRole.length > 1
+      ? context.review_team_id
+        ? 'Team ' + (index + 1)
+        : context.institution_id
+          ? 'Institution ' + (index + 1)
+          : 'Access ' + (index + 1)
+      : undefined;
+    return formatRoleContextLabel(context, scopeLabel);
+  };
   const CurrentIcon = ROLE_ICONS[activeWorkspace] || UserCheck;
 
   // Single assigned role scenario: render locked badge (no dropdown)
   if (auth.roles.length <= 1) {
     const contextLabel = activeContext
-      ? formatRoleContextLabel(activeContext)
+      ? getContextLabel(activeContext)
       : ROLES[activeWorkspace]?.name || 'Standard Access';
 
     return (
@@ -66,9 +78,9 @@ export function DemoRoleSelector() {
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end" className="max-w-xs text-xs p-3">
-          <p className="font-medium text-white mb-1">Assigned Scope</p>
+          <p className="font-medium text-white mb-1">Your access</p>
           <p className="text-slate-300 leading-relaxed text-[11px]">
-            Your account is assigned to this single regulatory role and scope.
+            Your account has one role and its assigned work area.
           </p>
         </TooltipContent>
       </Tooltip>
@@ -86,7 +98,7 @@ export function DemoRoleSelector() {
           ? '/admin/policy/route-simulator'
           : ROLES[ws].defaultPath;
         navigate(destination);
-        toast.info(`Switched Scope: ${formatRoleContextLabel(target)}`, {
+        toast.info(`Switched role: ${getContextLabel(target)}`, {
           description: ROLES[ws].label,
         });
       }
@@ -102,7 +114,7 @@ export function DemoRoleSelector() {
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg p-1 pl-2">
             <span className="text-[11px] font-medium tracking-tight text-slate-500 uppercase flex items-center gap-1 select-none">
               <CurrentIcon className="size-3.5 text-primary" />
-              <span className="hidden sm:inline">Scope:</span>
+              <span className="hidden sm:inline">Role:</span>
             </span>
 
             <Select value={currentKey} onValueChange={handleContextChange}>
@@ -117,7 +129,7 @@ export function DemoRoleSelector() {
                 {auth.roles.map((rc) => {
                   const ws = roleCodeToWorkspace(rc.role_code) || 'auditor';
                   const Icon = ROLE_ICONS[ws] || UserCheck;
-                  const label = formatRoleContextLabel(rc);
+                  const label = getContextLabel(rc);
                   const key = getRoleContextKey(rc);
 
                   return (
@@ -127,7 +139,7 @@ export function DemoRoleSelector() {
                         <div>
                           <div className="font-medium text-foreground">{label}</div>
                           <div className="text-[10px] text-muted-foreground">
-                            {rc.role_code}
+                            {rc.institution_id ? 'Institution access' : rc.review_team_id ? 'Assigned team' : 'Platform-wide access'}
                           </div>
                         </div>
                       </div>
@@ -144,9 +156,9 @@ export function DemoRoleSelector() {
         </TooltipTrigger>
 
         <TooltipContent side="bottom" align="end" className="max-w-xs text-xs p-3">
-          <p className="font-medium text-white mb-1">Switch Role Scope</p>
+          <p className="font-medium text-white mb-1">Switch role</p>
           <p className="text-slate-300 leading-relaxed text-[11px]">
-            Switch between authorized regulatory contexts and assigned institutions or review teams.
+            Change between the roles and teams assigned to your account.
           </p>
         </TooltipContent>
       </Tooltip>

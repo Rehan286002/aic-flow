@@ -79,9 +79,9 @@ export function DemoRoleProvider({ children }: { children: ReactNode }) {
     let dynamicOrg = base.organization;
     if (auth.activeContext) {
       if (auth.activeContext.institution_id) {
-        dynamicOrg = `Institution scope (${auth.activeContext.institution_id.slice(0, 8)})`;
+        dynamicOrg = 'Institution account';
       } else if (auth.activeContext.review_team_id) {
-        dynamicOrg = `Authorised review team (${auth.activeContext.review_team_id.slice(0, 8)})`;
+        dynamicOrg = 'Assigned review team';
       }
     }
 

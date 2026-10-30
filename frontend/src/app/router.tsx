@@ -8,10 +8,8 @@ import { AuditorCaseWorkspacePage } from '@/pages/auditor/AuditorCaseWorkspacePa
 import { AuditorEvidenceExplorerPage } from '@/pages/auditor/AuditorEvidenceExplorerPage';
 import { AuditorFindingReviewPage } from '@/pages/auditor/AuditorFindingReviewPage';
 import InstitutionApplicationsPage from '@/pages/institution/InstitutionApplicationsPage';
+import InstitutionOverviewPage from '@/pages/institution/InstitutionOverviewPage';
 import NewApplicationPage from '@/pages/institution/NewApplicationPage';
-import { InstitutionDocumentsPage } from '@/pages/institution/InstitutionDocumentsPage';
-import { InstitutionRectificationPage } from '@/pages/institution/InstitutionRectificationPage';
-import { InstitutionReportsPage } from '@/pages/institution/InstitutionReportsPage';
 import LeadOverviewPage from '@/pages/lead/LeadOverviewPage';
 import { LeadEscalatedQueuePage } from '@/pages/lead/LeadEscalatedQueuePage';
 import { LeadCaseReviewPage } from '@/pages/lead/LeadCaseReviewPage';
@@ -86,11 +84,11 @@ export const router = createBrowserRouter([
           },
           {
             path: 'activity',
-            element: <RoleWorkspacePage workspace="institution" section="history" />,
+            element: <RoleWorkspacePage workspace="auditor" section="history" />,
           },
           {
             path: 'reports',
-            element: <InstitutionReportsPage />,
+            element: <RoleWorkspacePage workspace="auditor" section="reports" />,
           },
           {
             path: 'assist',
@@ -109,7 +107,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'overview',
-            element: <RoleWorkspacePage workspace="institution" section="overview" />,
+            element: <InstitutionOverviewPage />,
           },
           {
             path: 'applications',
@@ -121,19 +119,19 @@ export const router = createBrowserRouter([
           },
           {
             path: 'documents',
-            element: <InstitutionDocumentsPage />,
+            element: <RoleWorkspacePage workspace="institution" section="renewals" />,
           },
           {
             path: 'rectification',
-            element: <InstitutionRectificationPage />,
+            element: <RoleWorkspacePage workspace="institution" section="clarification" />,
           },
           {
             path: 'activity',
-            element: <LeadAuditHistoryPage />,
+            element: <RoleWorkspacePage workspace="institution" section="history" />,
           },
           {
             path: 'reports',
-            element: <InstitutionReportsPage />,
+            element: <RoleWorkspacePage workspace="institution" section="reports" />,
           },
           {
             path: 'assist',

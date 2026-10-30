@@ -227,3 +227,83 @@ def test_institution_notification_for_evc_contains_only_visit_date():
     assert "Restricted internal location notes" not in body
     assert "confidential" not in body.lower()
     assert severity == "INFO"
+
+
+
+@pytest.mark.parametrize(
+    ("event_type", "expected_type"),
+    [
+        ("OFFICER_NOTE", None),
+        ("EVC_REPORT_RECORDED", None),
+        ("COMMITTEE_CONVENED", None),
+        ("COMMITTEE_MINUTES_RECORDED", None),
+        ("DECISION_RECORDED", None),
+        ("ESCALATION_ACKNOWLEDGED", None),
+        ("ESCALATION_RESOLVED", None),
+        ("DEMO_ESCALATION_CREATED", None),
+        ("OBLIGATION_CREATED", "OBLIGATION_CREATED"),
+        ("OBLIGATION_RETURN", "OBLIGATION_EVIDENCE_RETURNED"),
+    ],
+)
+def test_institution_timeline_projection_hides_internal_events_and_payloads(event_type, expected_type):
+    from app.services.workflow_service import institution_timeline_projection
+
+    event = SimpleNamespace(
+        event_type=event_type,
+        event_payload={
+            "internal_note": "Confidential staff or committee detail",
+            "official_order_reference": "INTERNAL-ORDER-REFERENCE",
+            "obligation_id": "demo-obligation",
+        },
+        summary="Confidential internal event summary",
+        from_stage="SCRUTINY",
+        to_stage="AWAITING_AUTHORITY",
+    )
+    projection = institution_timeline_projection(event)
+    if expected_type is None:
+        assert projection is None
+        return
+
+    assert projection["event_type"] == expected_type
+    assert "Confidential" not in projection["summary"]
+    assert "INTERNAL-ORDER-REFERENCE" not in projection["summary"]
+    assert "internal_note" not in projection
+    assert projection["from_stage"] is None
+    assert projection["to_stage"] is None
+
+
+def test_institution_timeline_stage_update_contains_no_internal_transition_reason():
+    from app.services.workflow_service import institution_timeline_projection
+
+    event = SimpleNamespace(
+        event_type="STAGE_TRANSITION",
+        event_payload={"note": "Confidential scrutiny reason", "decision_payload": {"secret": True}},
+        summary="Confidential scrutiny reason",
+        from_stage="SCRUTINY",
+        to_stage="CLARIFICATION_REQUESTED",
+    )
+    projection = institution_timeline_projection(event)
+    assert projection is not None
+    assert projection["event_type"] == "APPLICATION_STATUS_UPDATED"
+    assert "Confidential" not in projection["summary"]
+    assert projection["to_stage"] == "CLARIFICATION_REQUESTED"
+    assert projection["from_stage"] == "SCRUTINY"
+
+
+
+def test_evc_coordinator_can_follow_up_a_scheduled_visit_within_team_scope():
+    app = SimpleNamespace(institution_id="institution-1", review_team_id="team-1")
+    workflow_case = SimpleNamespace(
+        assigned_user_id="evc-participant-1",
+        assigned_role_code="EVC_MEMBER",
+        current_stage="EVC_SCHEDULED",
+        route_snapshot={"requires_evc": True, "requires_committee": False},
+    )
+    context = SimpleNamespace(
+        role_code="EVC_COORDINATOR",
+        review_team_id="team-1",
+        institution_id=None,
+    )
+    assert case_access_context(
+        None, app, [context], case=workflow_case, user_id="evc-coordinator-1"
+    ) is context

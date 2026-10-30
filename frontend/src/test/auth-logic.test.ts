@@ -32,11 +32,11 @@ test('each PS 26262 permission package maps to the correct workspace', () => {
 test('workspace defaults and role labels are explicit', () => {
   const defaults: Array<[RoleContext['role_code'], string]> = [
     ['INSTITUTION_USER', 'Institution Representative'],
-    ['INTAKE_OFFICER', 'Intake / Registry Officer'],
-    ['SCRUTINY_OFFICER', 'Scrutiny / Processing Officer'],
-    ['REGIONAL_OFFICER', 'Regional Officer / Coordinator'],
+    ['INTAKE_OFFICER', 'Application Intake Officer'],
+    ['SCRUTINY_OFFICER', 'Application Scrutiny Officer'],
+    ['REGIONAL_OFFICER', 'Regional Officer'],
     ['EVC_COORDINATOR', 'EVC Coordinator'],
-    ['EVC_MEMBER', 'EVC Assigned Participant'],
+    ['EVC_MEMBER', 'EVC Participant'],
     ['COMMITTEE_SECRETARIAT', 'Committee Secretariat'],
     ['BUREAU_SUPERVISOR', 'Bureau Supervisor'],
     ['COMPETENT_AUTHORITY', 'Competent Authority'],
@@ -77,4 +77,49 @@ test('ApiError captures HTTP and network failure information', () => {
 test('CSRF cache functions manage their in-memory token', () => {
   clearCachedCsrfToken();
   assert.equal(getCachedCsrfToken(), null);
+});
+
+
+
+test('role labels do not expose database identifiers or raw role codes', () => {
+  const context: RoleContext = {
+    role_code: 'SCRUTINY_OFFICER',
+    institution_id: null,
+    review_team_id: '12345678-90ab-cdef-1234-567890abcdef',
+  };
+  const label = formatRoleContextLabel(context, 'Team 2');
+  assert.equal(label, 'Application Scrutiny Officer · Team 2');
+  assert.equal(label.includes('12345678'), false);
+  assert.equal(label.includes('SCRUTINY_OFFICER'), false);
+});
+
+test('institution role label does not expose the institution database identifier', () => {
+  const context: RoleContext = {
+    role_code: 'INSTITUTION_USER',
+    institution_id: '12345678-90ab-cdef-1234-567890abcdef',
+    review_team_id: null,
+  };
+  assert.equal(formatRoleContextLabel(context), 'Institution Representative');
+});
+
+
+
+test('role context display uses a readable team label instead of an internal ID', () => {
+  const context: RoleContext = {
+    role_code: 'EVC_COORDINATOR',
+    institution_id: null,
+    review_team_id: '12345678-90ab-cdef-1234-567890abcdef',
+  };
+  assert.equal(formatRoleContextLabel(context, 'Team 1'), 'EVC Coordinator · Team 1');
+});
+
+
+test('duplicate institution scopes receive readable labels without exposing identifiers', () => {
+  const context: RoleContext = {
+    role_code: 'INSTITUTION_USER',
+    institution_id: 'private-institution-id',
+    review_team_id: null,
+  };
+  assert.equal(formatRoleContextLabel(context, 'Institution 2'), 'Institution Representative · Institution 2');
+  assert.equal(formatRoleContextLabel(context, 'Institution 2').includes('private-institution-id'), false);
 });

@@ -49,7 +49,24 @@ export default function InstitutionApplicationsPage() {
     fetchApplications();
   }, [fetchApplications]);
 
-  const hasExistingApplication = applications.length > 0;
+  const hasEoaApplication = applications.some((app) =>
+    app.academic_year === '2026-27'
+    && app.application_family === 'EXISTING_INSTITUTION'
+    && app.process_type === 'EOA_SELF_DISCLOSURE'
+  );
+  const hasIncreaseIntakeApplication = applications.some((app) =>
+    app.academic_year === '2026-27'
+    && app.application_family === 'EXISTING_INSTITUTION'
+    && app.process_type === 'INCREASE_INTAKE'
+  );
+  const canCreateApplication = !hasEoaApplication || !hasIncreaseIntakeApplication;
+
+  const processLabels: Record<string, string> = {
+    EOA_SELF_DISCLOSURE: 'Extension of Approval — self-disclosure',
+    INCREASE_INTAKE: 'Increase in intake',
+  };
+  const processLabel = (value: string) =>
+    processLabels[value] || value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (part) => part.toUpperCase());
 
   return (
     <div className="space-y-6">
@@ -64,11 +81,11 @@ export default function InstitutionApplicationsPage() {
               variant="outline"
               className="text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-200"
             >
-              AICTE ID: 1-10948201
+              Institution account
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Apex Institute of Technology, Pune • Academic Year 2026–27 Self-Disclosure Portfolio
+            Application records linked to your authorised institution account.
           </p>
         </div>
 
@@ -87,11 +104,11 @@ export default function InstitutionApplicationsPage() {
           <Button
             size="sm"
             onClick={() => navigate('/institution/applications/new')}
-            disabled={loading || hasExistingApplication}
+            disabled={loading || !canCreateApplication}
             title={
-              hasExistingApplication
-                ? 'Only one Extension of Approval application per academic year is supported in this prototype'
-                : 'Create new application draft'
+              !canCreateApplication
+                ? 'Both supported application types are already registered for AY 2026–27'
+                : 'Create a new application'
             }
             className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs disabled:opacity-50"
           >
@@ -124,13 +141,12 @@ export default function InstitutionApplicationsPage() {
       <InstitutionWorkflowProgress />
 
       {/* Single Application Notice if already exists */}
-      {hasExistingApplication && (
+      {hasEoaApplication && (
         <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/60 text-xs text-indigo-900 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Calendar className="size-4 text-indigo-600 shrink-0" />
             <span>
-              <strong>AY 2026–27 Application Registered:</strong> One Extension of Approval (EoA)
-              application is active for this academic cycle.
+              <strong>Extension of Approval already registered:</strong> You can still create an Increase in Intake application for AY 2026–27, where applicable.
             </span>
           </div>
           <Button
@@ -153,7 +169,7 @@ export default function InstitutionApplicationsPage() {
                 Registered Applications
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Self-disclosure filings and associated Annexure 2.1 compliance packages
+                Application type, academic year, current status and last update
               </CardDescription>
             </div>
             <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
@@ -178,14 +194,13 @@ export default function InstitutionApplicationsPage() {
                   No Applications Initiated
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Apex Institute of Technology does not currently have an active self-disclosure
-                  filing for Academic Year 2026–27. Initiate a new Extension of Approval (EoA)
-                  application to configure required Annexure 2.1 evidence checklists.
+                  Your institution does not yet have an application for AY 2026–27. Start an Extension of Approval or Increase in Intake application to continue.
                 </p>
               </div>
               <div className="pt-2">
                 <Button
                   size="sm"
+                  disabled={!canCreateApplication}
                   onClick={() => navigate('/institution/applications/new')}
                   className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
@@ -221,9 +236,7 @@ export default function InstitutionApplicationsPage() {
                         {app.academic_year}
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">
-                        {app.application_family === 'EXISTING_INSTITUTION'
-                          ? 'Extension of Approval (EoA)'
-                          : app.application_family}
+                        {processLabel(app.process_type)}
                       </td>
                       <td className="py-3.5 px-4 font-mono text-slate-600">
                         Rev-0{app.current_revision_number ?? 1}

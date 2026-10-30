@@ -49,6 +49,7 @@ export default function InstitutionOverviewPage() {
   const institutionId = activeContext?.institution_id;
 
   const [application, setApplication] = useState<ApplicationDetail | null>(null);
+  const [hasOtherApplications, setHasOtherApplications] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,12 +83,13 @@ export default function InstitutionOverviewPage() {
 
     try {
       const list = await applicationsApi.list(institutionId);
-      if (list.length > 0) {
-        // Fetch detailed record of the first (and only) AY 2026-27 application
-        const detail = await applicationsApi.getDetail(institutionId, list[0].application_id);
+      const eoaApplication = list.find((item) => item.process_type === 'EOA_SELF_DISCLOSURE');
+      setHasOtherApplications(list.some((item) => item.process_type !== 'EOA_SELF_DISCLOSURE'));
+      if (eoaApplication) {
+        const detail = await applicationsApi.getDetail(institutionId, eoaApplication.application_id);
         setApplication(detail);
 
-        // Prepopulate declaration edit fields
+        // Prepopulate the declarations for the selected EoA application.
         const decls = detail.current_revision.declarations || {};
         setCompletionDate(decls.completion_certificate_issue_date || '');
         if (decls.payment_applicable === true) setPaymentStatus('true');
@@ -96,6 +98,9 @@ export default function InstitutionOverviewPage() {
         setRemarks(decls.application_remarks || '');
       } else {
         setApplication(null);
+        setCompletionDate('');
+        setPaymentStatus('pending');
+        setRemarks('');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load application data.');
@@ -179,7 +184,7 @@ export default function InstitutionOverviewPage() {
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Apex Institute of Technology, Pune • Permanent Institute Code: 1-10948201
+            Applications and supporting documents for your authorised institution account.
           </p>
         </div>
 
@@ -246,10 +251,9 @@ export default function InstitutionOverviewPage() {
                 No Active AY 2026–27 Extension of Approval Application
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Apex Institute of Technology does not currently have an active self-disclosure
-                filing. Initiate an Extension of Approval application draft to establish the
-                seven statutory Annexure 2.1 evidence requirements and review preliminary
-                applicability determinations.
+                {hasOtherApplications
+                  ? 'You have another application type for this academic year. Open My Applications to track it, or start an Extension of Approval application to access its separate document checklist.'
+                  : 'Your institution does not have an Extension of Approval application for this academic year. Start one to view its document checklist and submit supporting evidence.'}
               </p>
             </div>
             <div className="pt-2">
@@ -511,7 +515,7 @@ export default function InstitutionOverviewPage() {
                   </DialogTitle>
                 </div>
                 <DialogDescription className="text-xs text-slate-500">
-                  Application: {application?.application_number} • Apex Institute of Technology
+                  Application: {application?.application_number} • Your institution
                 </DialogDescription>
               </div>
             </div>

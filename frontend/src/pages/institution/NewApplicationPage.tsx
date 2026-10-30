@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,8 @@ export default function NewApplicationPage() {
 
   const [academicYear] = useState('2026-27');
   const [processType, setProcessType] = useState<'EOA_SELF_DISCLOSURE' | 'INCREASE_INTAKE'>('EOA_SELF_DISCLOSURE');
+  const [existingProcessTypes, setExistingProcessTypes] = useState<string[]>([]);
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [applicationFamily] = useState<'EXISTING_INSTITUTION'>('EXISTING_INSTITUTION');
   const [completionDate, setCompletionDate] = useState<string>('');
   const [paymentStatus, setPaymentStatus] = useState<'true' | 'false' | 'pending'>('pending');
@@ -36,10 +38,44 @@ export default function NewApplicationPage() {
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    if (!institutionId) {
+      setCheckingExisting(false);
+      return;
+    }
+    applicationsApi.list(institutionId)
+      .then((items) => {
+        if (!active) return;
+        const existing = items
+          .filter((item) => item.academic_year === academicYear)
+          .map((item) => item.process_type);
+        setExistingProcessTypes(existing);
+        setProcessType((current) => {
+          if (!existing.includes(current)) return current;
+          return existing.includes('EOA_SELF_DISCLOSURE') ? 'INCREASE_INTAKE' : 'EOA_SELF_DISCLOSURE';
+        });
+      })
+      .catch(() => {
+        if (active) setGeneralError('Could not check existing applications. The server will still check for duplicate application types when you submit.');
+      })
+      .finally(() => { if (active) setCheckingExisting(false); });
+    return () => { active = false; };
+  }, [institutionId, academicYear]);
+
+  const selectedTypeExists = existingProcessTypes.includes(processType);
+  const bothTypesExist = existingProcessTypes.includes('EOA_SELF_DISCLOSURE')
+    && existingProcessTypes.includes('INCREASE_INTAKE');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!institutionId) {
       setGeneralError('Institution context missing. Please re-authenticate.');
+      return;
+    }
+
+    if (selectedTypeExists) {
+      setConflictError('An application of this type is already registered for AY ' + academicYear + '. Choose the other available application type.');
       return;
     }
 
@@ -64,7 +100,7 @@ export default function NewApplicationPage() {
       toast.success('Application Draft Created', {
         description: `Application ${createdApp.application_number} created and added to the approval workflow.`,
       });
-      navigate('/workflow');
+      navigate('/institution/overview');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictError(
@@ -96,7 +132,7 @@ export default function NewApplicationPage() {
             </Button>
             <span className="text-slate-300">/</span>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-              New Application Filing
+              Create application
             </h1>
           </div>
           <p className="text-xs text-slate-500">
@@ -159,16 +195,16 @@ export default function NewApplicationPage() {
           <CardHeader className="p-4 sm:p-5 border-b border-slate-100">
             <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <FilePlus className="size-4 text-indigo-600" />
-              <span>Application Parameters</span>
+              <span>Application details</span>
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Select the application category. The category-specific route is recorded with the application.
+              Choose the application type. The next steps depend on the selected type and the current approved processing rules.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="p-4 sm:p-5 space-y-6">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-slate-700">Application Process</Label>
+              <Label className="text-xs font-semibold text-slate-700">Application type</Label>
               <RadioGroup
                 value={processType}
                 onValueChange={(value) => setProcessType(value as 'EOA_SELF_DISCLOSURE' | 'INCREASE_INTAKE')}
@@ -176,24 +212,26 @@ export default function NewApplicationPage() {
               >
                 <div className={`rounded-lg border p-3 ${processType === 'EOA_SELF_DISCLOSURE' ? 'border-indigo-300 bg-indigo-50/70' : 'border-slate-200 bg-white'}`}>
                   <div className="flex items-start gap-2">
-                    <RadioGroupItem value="EOA_SELF_DISCLOSURE" id="process-eoa" />
+                    <RadioGroupItem value="EOA_SELF_DISCLOSURE" id="process-eoa" disabled={existingProcessTypes.includes('EOA_SELF_DISCLOSURE')} />
                     <Label htmlFor="process-eoa" className="cursor-pointer space-y-1">
                       <span className="block text-xs font-semibold text-slate-900">Extension of Approval — Self Disclosure</span>
-                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">Configured baseline route. No scrutiny or EVC stage under the selected baseline category.</span>
+                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">{existingProcessTypes.includes('EOA_SELF_DISCLOSURE') ? 'Already registered for this academic year.' : 'For the annual self-disclosure and supporting documents.'}</span>
                     </Label>
                   </div>
                 </div>
                 <div className={`rounded-lg border p-3 ${processType === 'INCREASE_INTAKE' ? 'border-indigo-300 bg-indigo-50/70' : 'border-slate-200 bg-white'}`}>
                   <div className="flex items-start gap-2">
-                    <RadioGroupItem value="INCREASE_INTAKE" id="process-increase" />
+                    <RadioGroupItem value="INCREASE_INTAKE" id="process-increase" disabled={existingProcessTypes.includes('INCREASE_INTAKE')} />
                     <Label htmlFor="process-increase" className="cursor-pointer space-y-1">
                       <span className="block text-xs font-semibold text-slate-900">Increase in Intake</span>
-                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">Partial configured route: scrutiny and EVC. Committee applicability requires policy confirmation.</span>
+                      <span className="block text-[10px] font-normal leading-relaxed text-slate-500">{existingProcessTypes.includes('INCREASE_INTAKE') ? 'Already registered for this academic year.' : 'For a request to increase approved student intake.'}</span>
                     </Label>
                   </div>
                 </div>
               </RadioGroup>
-              <p className="text-[11px] text-slate-500">The selected category, baseline handbook version and route snapshot are stored with the application. Unsupported categories remain blocked until an authorised policy route is confirmed.</p>
+              <p className="text-[11px] text-slate-500">You can register each supported application type once per academic year. An application type that is already registered cannot be submitted again.</p>
+              {checkingExisting && <p className="text-[11px] text-indigo-700">Checking applications already registered for this year…</p>}
+              {bothTypesExist && <p className="text-[11px] text-amber-800">Both supported application types are already registered for this academic year.</p>}
             </div>
             {/* Core Parameters Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -205,14 +243,14 @@ export default function NewApplicationPage() {
                   className="bg-slate-50 text-xs font-mono text-slate-700 border-slate-200 cursor-not-allowed"
                 />
                 <p className="text-[11px] text-slate-400">
-                  Fixed regulatory cycle for current evaluation.
+                  Current application year.
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">Application Family</Label>
+                <Label className="text-xs font-semibold text-slate-700">Institution type</Label>
                 <Input
-                  value="EXISTING_INSTITUTION"
+                  value="Existing technical institution"
                   disabled
                   className="bg-slate-50 text-xs font-mono text-slate-700 border-slate-200 cursor-not-allowed"
                 />
@@ -237,12 +275,11 @@ Application family for an existing technical institution.
                   <span className="text-[10px] text-slate-500 font-mono">Optional on Draft</span>
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  <strong>Annexure 2.1, Clause 4 rule:</strong> A Structural Stability Certificate
-                  (<code>EOA-SD-04</code>) is <strong>Applicable</strong> only when the building is{' '}
-                  <em>more than 30 years</em> from the issue date of its Completion Certificate,
-                  evaluated against illustrative AY 2026–27 reference assessment date <code>2026-07-01</code> (deterministic evaluation baseline, not an official statutory AICTE filing deadline). If exactly 30 years or
-                  less, it is <strong>Not Applicable</strong>. If omitted, status remains{' '}
-                  <strong>Pending Determination</strong>.
+                  Under the current demonstration checklist, a Structural Stability Certificate
+                  is required when the building completion certificate is more than 30 years old.
+                  The example assessment date for this academic year is 1 July 2026; this is not an
+                  official filing deadline. If the date is not known yet, leave it blank and the
+                  checklist will show that it still needs to be determined.
                 </p>
               </div>
 
@@ -256,52 +293,6 @@ Application family for an existing technical institution.
                 />
               </div>
 
-              {/* Quick Fill Test Presets */}
-              <div className="pt-1">
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
-                  Regulatory Boundary Quick Fill (for evaluation):
-                </span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setCompletionDate('1990-05-15')}
-                    className="text-[11px] h-6 px-2 border-slate-200 text-slate-700 hover:border-indigo-400"
-                  >
-                    1990-05-15 (&gt;30 yrs &rarr; Applicable)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setCompletionDate('1996-07-01')}
-                    className="text-[11px] h-6 px-2 border-slate-200 text-slate-700 hover:border-indigo-400"
-                  >
-                    1996-07-01 (Exact 30 yrs &rarr; Not Applicable)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setCompletionDate('2008-01-10')}
-                    className="text-[11px] h-6 px-2 border-slate-200 text-slate-700 hover:border-indigo-400"
-                  >
-                    2008-01-10 (&lt;30 yrs &rarr; Not Applicable)
-                  </Button>
-                  {completionDate && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setCompletionDate('')}
-                      className="text-[11px] h-6 px-2 text-rose-600 hover:bg-rose-50"
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
             </div>
 
             </>)}
@@ -311,7 +302,7 @@ Application family for an existing technical institution.
               <div className="space-y-1">
                 <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <ShieldCheck className="size-3.5 text-indigo-600" />
-                  <span>Web-Portal Payment Receipt Declaration (EOA-SD-02)</span>
+                  <span>Web-portal payment receipt</span>
                 </Label>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
                   <strong>Annexure 2.1, Clause 2 rule:</strong> Copy of AICTE Web-Portal payment
@@ -393,7 +384,7 @@ Application family for an existing technical institution.
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <Info className="size-3.5 text-slate-400 shrink-0" />
               <span>
-                Creates the application and records its category-specific workflow route.
+                Creates your application and shows the next steps.
               </span>
             </div>
 
@@ -411,10 +402,10 @@ Application family for an existing technical institution.
               <Button
                 type="submit"
                 size="sm"
-                disabled={submitting || !!conflictError}
+                disabled={submitting || checkingExisting || selectedTypeExists || bothTypesExist || !!conflictError}
                 className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
               >
-                {submitting ? 'Creating Draft...' : 'Create Application Draft'}
+                {submitting ? 'Creating application…' : 'Create application'}
               </Button>
             </div>
           </CardFooter>

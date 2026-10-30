@@ -77,21 +77,25 @@ export function getRoleContextKey(rc: RoleContext): string {
   return rc.role_code + ':' + (rc.institution_id || '') + ':' + (rc.review_team_id || '');
 }
 
-export function formatRoleContextLabel(rc: RoleContext): string {
-  const teamSuffix = rc.review_team_id ? ' · Team ' + rc.review_team_id.slice(0, 8) : '';
+export function formatRoleContextLabel(rc: RoleContext, scopeLabel?: string): string {
+  const scopeSuffix = scopeLabel
+    ? ' · ' + scopeLabel
+    : rc.review_team_id
+      ? ' · Assigned team'
+      : '';
   switch (rc.role_code) {
     case 'INSTITUTION_USER':
-      return rc.institution_id ? 'Institution · ' + rc.institution_id.slice(0, 8) : 'Institution Representative';
-    case 'INTAKE_OFFICER': return 'Intake / Registry Officer' + teamSuffix;
+      return 'Institution Representative' + scopeSuffix;
+    case 'INTAKE_OFFICER': return 'Application Intake Officer' + scopeSuffix;
     case 'SCRUTINY_OFFICER':
-    case 'AUDITOR': return 'Scrutiny / Processing Officer' + teamSuffix;
-    case 'REGIONAL_OFFICER': return 'Regional Officer / Coordinator' + teamSuffix;
-    case 'EVC_COORDINATOR': return 'EVC Coordinator' + teamSuffix;
-    case 'EVC_MEMBER': return 'EVC Assigned Participant' + teamSuffix;
-    case 'COMMITTEE_SECRETARIAT': return 'Committee Secretariat' + teamSuffix;
-    case 'BUREAU_SUPERVISOR': return 'Bureau Supervisor' + teamSuffix;
-    case 'COMPETENT_AUTHORITY': return 'Competent Authority' + teamSuffix;
-    case 'LEAD_AUDITOR': return 'Senior / Lead Officer' + teamSuffix;
+    case 'AUDITOR': return 'Application Scrutiny Officer' + scopeSuffix;
+    case 'REGIONAL_OFFICER': return 'Regional Officer' + scopeSuffix;
+    case 'EVC_COORDINATOR': return 'EVC Coordinator' + scopeSuffix;
+    case 'EVC_MEMBER': return 'EVC Participant' + scopeSuffix;
+    case 'COMMITTEE_SECRETARIAT': return 'Committee Secretariat' + scopeSuffix;
+    case 'BUREAU_SUPERVISOR': return 'Bureau Supervisor' + scopeSuffix;
+    case 'COMPETENT_AUTHORITY': return 'Competent Authority' + scopeSuffix;
+    case 'LEAD_AUDITOR': return 'Lead Officer' + scopeSuffix;
     case 'REGULATORY_POLICY_PUBLISHER': return 'Regulatory Policy Publisher / Approver';
     case 'ADMIN': return 'Platform Administrator';
     default: return rc.role_code;

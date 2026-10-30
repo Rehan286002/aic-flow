@@ -26,12 +26,12 @@ export function UserMenu() {
     try {
       await auth.logout();
       toast.success('Signed Out', {
-        description: 'Regulatory session terminated successfully.',
+        description: 'You have signed out.',
       });
       navigate('/login', { replace: true });
     } catch {
       toast.error('Sign Out Error', {
-        description: 'Local session cleared.',
+        description: 'Your session has been cleared.',
       });
       navigate('/login', { replace: true });
     }
@@ -39,8 +39,8 @@ export function UserMenu() {
 
   const handleViewSessionInfo = () => {
     const rolesSummary = auth.roles.map(formatRoleContextLabel).join(' | ');
-    toast.info('Active Session Profile', {
-      description: `User: ${auth.user?.full_name || 'N/A'} • Assigned Scopes: ${rolesSummary || 'Standard'}`,
+    toast.info('Your account access', {
+      description: `User: ${auth.user?.full_name || 'N/A'} • Available roles: ${rolesSummary || 'Standard'}`,
     });
   };
 
@@ -111,15 +111,15 @@ export function UserMenu() {
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={handleViewSessionInfo} className="text-xs py-1.5 cursor-pointer">
             <User className="size-3.5 mr-2 text-slate-500" />
-            <span>Profile & Scopes</span>
+            <span>Profile & Access</span>
           </DropdownMenuItem>
 
           <DropdownMenuItem
-            onClick={() => navigate('/workflow')}
+            onClick={() => navigate(currentRoleConfig.defaultPath)}
             className="text-xs py-1.5 cursor-pointer"
           >
             <Shield className="size-3.5 mr-2 text-slate-500" />
-            <span>Case Activity & Audit Trail</span>
+            <span>My workspace</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
