@@ -37,6 +37,8 @@ class ComplianceObligation(Base):
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("'OPEN'"))
     evidence_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.document_id"), nullable=True)
+    evidence_document_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("document_versions.document_version_id"), nullable=True)
+    evidence_requirement_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("application_requirements.application_requirement_id"), nullable=True)
     evidence_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
     verification_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
