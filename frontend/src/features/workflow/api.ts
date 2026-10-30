@@ -210,7 +210,7 @@ export interface DocumentValidityRecord {
 export interface WorkflowReminderPolicy {
   reminder_policy_id: string;
   policy_code: string;
-  target_type: 'WORKFLOW_CASE' | 'OBLIGATION';
+  target_type: 'WORKFLOW_CASE' | 'OBLIGATION' | 'DOCUMENT_VALIDITY';
   days_from_due: number;
   recipient_group: 'INSTITUTION' | 'ASSIGNEE' | 'SUPERVISORS';
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
@@ -379,6 +379,15 @@ export const workflowApi = {
   },
   getObligationEvidenceDownloadUrl: (obligationId: string) =>
     `/api/v1/workflow/obligations/${encodeURIComponent(obligationId)}/evidence/download`,
+  uploadDocumentValiditySource: async (caseId: string, requirementId: string, file: File): Promise<DocumentUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<DocumentUploadResponse>(
+      `/api/v1/workflow/cases/${encodeURIComponent(caseId)}/document-validity/upload/${encodeURIComponent(requirementId)}`,
+      { method: 'POST', body: formData },
+      true,
+    );
+  },
   submitDocumentValidity: (caseId: string, payload: {
     application_requirement_id: string;
     document_version_id: string;
