@@ -463,11 +463,84 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
   };
 
   const exportCsv = () => {
-    const header = ['Application reference', 'Institution', 'Process type', 'Academic year', 'Route', 'Current stage', 'Assigned role', 'Due date'];
-    const rows = visibleCases.map((item) => [
-      item.application_number, item.institution_name, item.process_type, item.academic_year,
-      item.route_code, item.current_stage, item.assigned_role_code || '', item.due_at || '',
-    ]);
+    let header: string[];
+    let rows: string[][];
+
+    if (section === 'obligations' || section === 'escalations') {
+      header = ['Obligation reference', 'Condition', 'Description', 'Status', 'Due date', 'Source order or clause', 'Evidence reference', 'Verification note'];
+      rows = visibleObligations.map((item) => [
+        item.obligation_id,
+        item.title,
+        item.description,
+        item.status,
+        item.due_at,
+        item.source_condition,
+        item.evidence_reference || '',
+        item.verification_note || '',
+      ]);
+    } else if (section === 'renewals') {
+      header = ['Validity record', 'Application reference', 'Document type', 'Issuer', 'Valid from', 'Valid until', 'Verification status', 'Document reference', 'Replacement record'];
+      rows = validityRecords
+        .filter((item) => !selected || item.workflow_case_id === selected.workflow_case_id)
+        .map((item) => [
+          item.document_validity_id,
+          item.application_id,
+          item.document_type,
+          item.issuer,
+          item.valid_from || '',
+          item.valid_until,
+          item.verification_status,
+          item.document_reference,
+          item.replacement_of_id || '',
+        ]);
+    } else if (section === 'analytics') {
+      header = ['Record type', 'Record reference', 'Institution or application', 'Process or condition', 'Status', 'Owner role', 'Due date', 'Source'];
+      rows = [
+        ...visibleCases.map((item) => [
+          'APPLICATION',
+          item.application_number,
+          item.institution_name,
+          item.process_type,
+          item.current_stage,
+          item.assigned_role_code || '',
+          item.due_at || '',
+          item.route_code,
+        ]),
+        ...visibleObligations.map((item) => [
+          'OBLIGATION',
+          item.obligation_id,
+          item.application_id,
+          item.title,
+          item.status,
+          '',
+          item.due_at,
+          item.source_condition,
+        ]),
+        ...validityRecords.map((item) => [
+          'DOCUMENT_VALIDITY',
+          item.document_validity_id,
+          item.application_id,
+          item.document_type + ' · ' + item.issuer,
+          item.verification_status,
+          '',
+          item.valid_until,
+          item.document_reference,
+        ]),
+      ];
+    } else {
+      header = ['Application reference', 'Institution', 'Process type', 'Academic year', 'Route', 'Current stage', 'Assigned role', 'Due date'];
+      rows = visibleCases.map((item) => [
+        item.application_number,
+        item.institution_name,
+        item.process_type,
+        item.academic_year,
+        item.route_code,
+        item.current_stage,
+        item.assigned_role_code || '',
+        item.due_at || '',
+      ]);
+    }
+
     const escape = (value: string) => '"' + String(value).replaceAll('"', '""') + '"';
     const csv = [header, ...rows].map((row) => row.map((value) => escape(String(value))).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -476,7 +549,7 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     anchor.download = 'aic-flow-' + workspace + '-' + section + '.csv';
     anchor.click();
     URL.revokeObjectURL(url);
-    toast.success('Export generated from the currently loaded authorised records.');
+    toast.success('CSV generated from the currently loaded authorised records.');
   };
 
   const markNotificationRead = async (id: string) => {
@@ -641,7 +714,7 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
 
   return (
     <div className="space-y-5">
-      <PageHeading title={page.title} description={page.description} onRefresh={refresh} busy={busy} onExport={['reports', 'analytics'].includes(section) ? exportCsv : undefined} />
+      <PageHeading title={page.title} description={page.description} onRefresh={refresh} busy={busy} onExport={['reports', 'analytics', 'obligations', 'escalations', 'renewals'].includes(section) ? exportCsv : undefined} />
       <SyntheticNotice />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((item) => <Metric key={item.label} label={item.label} value={item.value} icon={item.icon} />)}
