@@ -173,6 +173,38 @@ export interface WorkflowDetail extends WorkflowCase {
   shc_proceeding: SHCProceeding | null;
   executive_committee_decision: ExecutiveCommitteeDecision | null;
   sac_appeal: SACAppeal | null;
+  document_validity_records: DocumentValidityRecord[];
+}
+
+export interface DocumentValidityRecord {
+  document_validity_record_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  application_requirement_id: string;
+  document_id: string;
+  document_version_id: string;
+  supersedes_validity_record_id: string | null;
+  validity_type: 'LEASE_DEED' | 'STRUCTURAL_STABILITY_CERTIFICATE' | 'FIRE_SAFETY_CERTIFICATE' | 'BUILDING_COMPLETION_CERTIFICATE' | 'ISSUER_DATED_DOCUMENT';
+  status: 'PENDING_REVIEW' | 'VERIFIED' | 'RETURNED' | 'SUPERSEDED';
+  issue_date: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  review_due_at: string | null;
+  lease_start_date: string | null;
+  lease_end_date: string | null;
+  maximum_course_duration_years: number | null;
+  lease_minimum_term_met: boolean | null;
+  lease_live_term_met_at_submission: boolean | null;
+  lease_eoa_cutoff_year_triggered: boolean | null;
+  lease_assessed_on: string | null;
+  validity_basis_reference: string;
+  submitted_by: string;
+  submitted_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WorkflowReminderPolicy {
@@ -347,6 +379,24 @@ export const workflowApi = {
   },
   getObligationEvidenceDownloadUrl: (obligationId: string) =>
     `/api/v1/workflow/obligations/${encodeURIComponent(obligationId)}/evidence/download`,
+  submitDocumentValidity: (caseId: string, payload: {
+    application_requirement_id: string;
+    document_version_id: string;
+    validity_type: DocumentValidityRecord['validity_type'];
+    issue_date?: string | null;
+    valid_from?: string | null;
+    valid_until?: string | null;
+    lease_start_date?: string | null;
+    lease_end_date?: string | null;
+    maximum_course_duration_years?: number | null;
+    validity_basis_reference: string;
+  }) => request<DocumentValidityRecord>(`/api/v1/workflow/cases/${caseId}/document-validity`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  reviewDocumentValidity: (recordId: string, action: 'VERIFY' | 'RETURN', note: string) =>
+    request<DocumentValidityRecord>(`/api/v1/workflow/document-validity/${recordId}/review`, {
+      method: 'POST', body: JSON.stringify({ action, note }),
+    }, true),
   reminderPolicies: () => request<WorkflowReminderPolicy[]>('/api/v1/workflow/reminder-policies'),
   updateReminderPolicy: (id: string, payload: {
     is_enabled?: boolean;
