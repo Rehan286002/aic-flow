@@ -76,10 +76,18 @@ set AIC_FLOW_DEMO_PASSWORD in your local shell before running the seed. Use a
 unique password and never reuse a production credential.
 
 The script prints the account emails and reports how many cases, obligations,
-and document-validity metadata records were created. Sign in with a different
-role account to inspect each workspace and follow a synthetic application
-through institution submission, processing, EVC, proceedings, authority review,
-and compliance tracking.
+document-validity records and synthetic deadline/escalation alerts were created.
+Sign in with a different role account to inspect each workspace and follow a
+synthetic application through institution submission, processing, EVC,
+proceedings, authority review, and compliance tracking.
+
+The seed creates example overdue and upcoming notification records for stage
+ageing, EVC, undertakings and document expiry so the notification centre and
+supervisory queue are populated immediately. These are one-time local
+demonstration events. They do not mean a recurring deadline scheduler, provider
+delivery, email or SMS integration is running. Production reminder/escalation
+processing still requires an authorised, monitored worker and published policy
+versions.
 
 **Document validity demonstration boundary:** pre-seeded lease examples are
 metadata-only records with non-downloadable placeholder storage keys. They

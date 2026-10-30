@@ -775,6 +775,159 @@ def seed_document_validity(db, application, case, institution, people) -> int:
     return 0
 
 
+def add_demo_alert(
+    db,
+    case: WorkflowCase,
+    actor: User,
+    *,
+    event_type: str,
+    summary: str,
+    payload: dict,
+) -> bool:
+    existing = db.scalar(
+        select(WorkflowEvent).where(
+            WorkflowEvent.workflow_case_id == case.workflow_case_id,
+            WorkflowEvent.event_type == event_type,
+            WorkflowEvent.summary == summary,
+        )
+    )
+    if existing is not None:
+        return False
+    add_workflow_event(
+        db,
+        case,
+        actor.user_id,
+        event_type=event_type,
+        summary=summary,
+        event_payload={
+            "demo_only": True,
+            "simulation_code": "PS26262_ROLE_WORKFLOW_WALKTHROUGH",
+            "alert_source": "SYNTHETIC_LOCAL_SEED",
+            **payload,
+        },
+    )
+    return True
+
+
+def seed_deadline_alerts(db, cases_by_suffix: dict, people: dict) -> int:
+    """Create persistent, explicitly synthetic deadline and escalation alerts."""
+    created = 0
+    now = datetime.now(UTC)
+
+    for suffix, event_type, actor_key, summary, alert_level in [
+        (
+            "0004",
+            "DEMO_DEADLINE_ALERT",
+            "scrutiny",
+            "Synthetic alert: the scrutiny stage is past its demonstration service target.",
+            "STAGE_OVERDUE",
+        ),
+        (
+            "0005",
+            "DEMO_EVC_REMINDER",
+            "evc_coordinator",
+            "Synthetic alert: EVC coordination is overdue and needs scheduling follow-up.",
+            "EVC_OVERDUE",
+        ),
+    ]:
+        _application, case = cases_by_suffix[suffix]
+        created += int(add_demo_alert(
+            db,
+            case,
+            people[actor_key],
+            event_type=event_type,
+            summary=summary,
+            payload={
+                "alert_level": alert_level,
+                "deadline_class": "ADMIN_TARGET",
+                "due_at": case.due_at.isoformat() if case.due_at else None,
+                "days_overdue": max(0, (now.date() - case.due_at.date()).days) if case.due_at else None,
+                "recipient_resolution": "CURRENT_ASSIGNEE_AND_SUPERVISORS",
+            },
+        ))
+
+    overdue_case = cases_by_suffix["0004"][1]
+    created += int(add_demo_alert(
+        db,
+        overdue_case,
+        people["scrutiny"],
+        event_type="DEMO_ESCALATION_CREATED",
+        summary="Synthetic supervisory escalation created for an overdue scrutiny stage.",
+        payload={
+            "escalation_level": "SUPERVISORY_REVIEW",
+            "trigger_type": "STAGE_OVERDUE",
+            "due_at": overdue_case.due_at.isoformat() if overdue_case.due_at else None,
+            "recipient_resolution": "REGIONAL_AND_BUREAU_SUPERVISORS",
+        },
+    ))
+
+    _compliance_application, compliance_case = cases_by_suffix["0009"]
+    obligations = db.scalars(
+        select(ComplianceObligation).where(
+            ComplianceObligation.workflow_case_id == compliance_case.workflow_case_id
+        )
+    ).all()
+    for item in obligations:
+        remaining = (item.due_at.date() - now.date()).days
+        if remaining < 0:
+            event_type = "DEMO_COMPLIANCE_ALERT"
+            summary = "Synthetic alert: compliance condition is overdue — " + item.title + "."
+            alert_kind = "OBLIGATION_OVERDUE"
+        elif remaining <= 15:
+            event_type = "DEMO_COMPLIANCE_ALERT"
+            summary = "Synthetic reminder: compliance evidence is due soon — " + item.title + "."
+            alert_kind = "OBLIGATION_DUE_SOON"
+        else:
+            continue
+        created += int(add_demo_alert(
+            db,
+            compliance_case,
+            people["scrutiny"],
+            event_type=event_type,
+            summary=summary,
+            payload={
+                "alert_level": alert_kind,
+                "obligation_id": str(item.obligation_id),
+                "due_at": item.due_at.isoformat(),
+                "days_until_due": remaining,
+                "deadline_class": "CASE_ORDER",
+                "source_reference": item.source_condition,
+            },
+        ))
+
+    validity_records = db.scalars(
+        select(DocumentValidityRecord).where(
+            DocumentValidityRecord.workflow_case_id == compliance_case.workflow_case_id
+        )
+    ).all()
+    for record in validity_records:
+        remaining = (record.valid_until - date.today()).days
+        if remaining < 0:
+            alert_kind = "DOCUMENT_EXPIRED"
+            summary = "Synthetic alert: a previous lease validity period has expired; verify its replacement."
+        elif remaining <= 30:
+            alert_kind = "DOCUMENT_EXPIRY_APPROACHING"
+            summary = "Synthetic reminder: lease document validity is approaching expiry."
+        else:
+            continue
+        created += int(add_demo_alert(
+            db,
+            compliance_case,
+            people["scrutiny"],
+            event_type="DEMO_DOCUMENT_EXPIRY_ALERT",
+            summary=summary,
+            payload={
+                "alert_level": alert_kind,
+                "document_validity_id": str(record.document_validity_id),
+                "document_type": record.document_type,
+                "valid_until": record.valid_until.isoformat(),
+                "days_until_expiry": remaining,
+                "verification_status": record.verification_status,
+            },
+        ))
+    return created
+
+
 def main() -> int:
     require_local_environment()
     password = prompt_demo_password()
@@ -794,6 +947,7 @@ def main() -> int:
         compliance_application, compliance_case = applications_by_suffix["0009"]
         obligations_created = seed_obligations(db, compliance_application, compliance_case, people)
         validity_created = seed_document_validity(db, compliance_application, compliance_case, institution, people)
+        alerts_created = seed_deadline_alerts(db, applications_by_suffix, people)
 
         db.commit()
         print("\nAIC-Flow local demo data is ready.")
@@ -803,6 +957,7 @@ def main() -> int:
         print(f"Existing workflow cases left unchanged: {existing_cases}")
         print(f"Created compliance obligations: {obligations_created}")
         print(f"Created document-validity metadata records: {validity_created}")
+        print(f"Created synthetic deadline and escalation alerts: {alerts_created}")
         print(f"Institution: {institution.institution_name} ({DEMO_INSTITUTION_CODE})")
         print(f"Operational team: {team.team_name}")
         print("\nLocal demo accounts (same password entered at the prompt for newly created accounts):")

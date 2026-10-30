@@ -243,6 +243,26 @@ def notify_case_participants(
         recipients.add(case.assigned_user_id)
     recipients.add(event.actor_user_id)
 
+    notification_titles = {
+        "CLARIFICATION_REQUESTED": "Clarification response required",
+        "EVC_VISIT_SCHEDULED": "EVC visit scheduled",
+        "EVC_REPORT_RECORDED": "EVC report received",
+        "DOCUMENT_RENEWAL_SUBMITTED": "Document renewal submitted",
+        "DEMO_DEADLINE_ALERT": "Application stage deadline alert",
+        "DEMO_EVC_REMINDER": "EVC schedule reminder",
+        "DEMO_COMPLIANCE_ALERT": "Institutional compliance deadline alert",
+        "DEMO_DOCUMENT_EXPIRY_ALERT": "Document validity alert",
+        "DEMO_ESCALATION_CREATED": "Supervisory escalation requires attention",
+    }
+    warning_events = {
+        "CLARIFICATION_REQUESTED",
+        "OBLIGATION_DUE",
+        "DEMO_DEADLINE_ALERT",
+        "DEMO_EVC_REMINDER",
+        "DEMO_COMPLIANCE_ALERT",
+        "DEMO_DOCUMENT_EXPIRY_ALERT",
+        "DEMO_ESCALATION_CREATED",
+    }
     for recipient in recipients:
         db.add(
             InAppNotification(
@@ -250,9 +270,9 @@ def notify_case_participants(
                 application_id=application.application_id,
                 workflow_event_id=event.workflow_event_id,
                 event_key=f"workflow-event:{event.workflow_event_id}",
-                title="Application workflow updated",
+                title=notification_titles.get(event.event_type, "Application workflow updated"),
                 body=message[:2000],
-                severity="WARNING" if event.event_type in {"CLARIFICATION_REQUESTED", "OBLIGATION_DUE"} else "INFO",
+                severity="WARNING" if event.event_type in warning_events else "INFO",
             )
         )
 

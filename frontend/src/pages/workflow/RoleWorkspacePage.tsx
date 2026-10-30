@@ -122,6 +122,7 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
   const [cases, setCases] = useState<WorkflowCase[]>([]);
   const [obligations, setObligations] = useState<ComplianceObligation[]>([]);
   const [notifications, setNotifications] = useState<WorkflowNotification[]>([]);
+  const [notificationFilter, setNotificationFilter] = useState<'ALL' | 'UNREAD' | 'READ' | 'WARNING'>('ALL');
   const [validityRecords, setValidityRecords] = useState<DocumentValidityRecord[]>([]);
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -561,6 +562,21 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     }
   };
 
+  const markAllNotificationsRead = async () => {
+    const unread = notifications.filter((item) => !item.read_at);
+    if (unread.length === 0) return;
+    setBusy(true);
+    try {
+      const results = await Promise.allSettled(unread.map((item) => workflowApi.markRead(item.notification_id)));
+      const failed = results.filter((item) => item.status === 'rejected').length;
+      await refresh();
+      if (failed) toast.warning(failed + ' notification(s) could not be marked as read.');
+      else toast.success('All notifications in this account have been marked as read.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const unreadCount = notifications.filter((item) => !item.read_at).length;
   const activeCount = cases.filter((item) => !isClosedStage(item.current_stage)).length;
   const overdueCases = cases.filter((item) => isOverdue(item.due_at) && !isClosedStage(item.current_stage));
@@ -602,7 +618,12 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
               { label: 'Overdue items', value: overdueCases.length + dueObligations.length, icon: AlertTriangle },
             ];
 
-  const filteredNotifications = notifications;
+  const filteredNotifications = notifications.filter((item) => {
+    if (notificationFilter === 'UNREAD') return !item.read_at;
+    if (notificationFilter === 'READ') return Boolean(item.read_at);
+    if (notificationFilter === 'WARNING') return item.severity === 'WARNING';
+    return true;
+  });
 
   if (workspace === 'admin' && section === 'route-simulator') {
     const profile = routeCategory === 'EOA_SELF_DISCLOSURE'
@@ -724,8 +745,19 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
 
       {section === 'notifications' ? (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 p-4"><div className="flex items-center gap-2"><Bell className="size-4 text-indigo-600"/><h2 className="font-semibold text-slate-900">Your notification inbox</h2><Badge variant="secondary">{unreadCount} unread</Badge></div></div>
-          {filteredNotifications.length === 0 ? <Empty title="No notifications in this account" description="Notifications appear when a scoped workflow event has a recipient match."/> : <div className="divide-y divide-slate-100">{filteredNotifications.map((item) => <div key={item.notification_id} className="flex flex-wrap items-start justify-between gap-3 p-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-semibold text-sm text-slate-900">{item.title}</span>{!item.read_at && <Badge variant="outline">Unread</Badge>}</div><p className="mt-1 text-sm text-slate-600">{item.body}</p><p className="mt-1 text-xs text-slate-400">{new Date(item.created_at).toLocaleString()}</p></div>{!item.read_at && <Button size="sm" variant="outline" onClick={() => void markNotificationRead(item.notification_id)}>Mark read</Button>}</div>)}</div>}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+            <div className="flex items-center gap-2"><Bell className="size-4 text-indigo-600"/><h2 className="font-semibold text-slate-900">Your notification inbox</h2><Badge variant="secondary">{unreadCount} unread</Badge></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={notificationFilter} onChange={(event) => setNotificationFilter(event.target.value as typeof notificationFilter)} aria-label="Filter notifications" className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
+                <option value="ALL">All notifications</option>
+                <option value="UNREAD">Unread only</option>
+                <option value="READ">Read only</option>
+                <option value="WARNING">Action required</option>
+              </select>
+              <Button size="sm" variant="outline" disabled={busy || unreadCount === 0} onClick={() => void markAllNotificationsRead()}>Mark all read</Button>
+            </div>
+          </div>
+          {filteredNotifications.length === 0 ? <Empty title="No notifications in this account" description="Notifications appear when a scoped workflow event has a recipient match."/> : <div className="divide-y divide-slate-100">{filteredNotifications.map((item) => <div key={item.notification_id} className="flex flex-wrap items-start justify-between gap-3 p-4"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-sm text-slate-900">{item.title}</span>{item.severity === 'WARNING' ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">Action required</Badge> : <Badge variant="secondary">Information</Badge>}{!item.read_at && <Badge variant="outline">Unread</Badge>}</div><p className="mt-1 text-sm text-slate-600">{item.body}</p><p className="mt-1 text-xs text-slate-400">{new Date(item.created_at).toLocaleString()}</p></div>{!item.read_at && <Button size="sm" variant="outline" onClick={() => void markNotificationRead(item.notification_id)}>Mark read</Button>}</div>)}</div>}
         </section>
       ) : null}
 
