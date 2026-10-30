@@ -24,6 +24,7 @@ from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
 from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
+from app.models.sac_appeal import SACAppeal
 from app.models.in_app_notification import InAppNotification
 from app.models.institution_membership import InstitutionMembership
 from app.models.review_team_member import ReviewTeamMember
@@ -358,6 +359,294 @@ def record_executive_committee_decision(
         f"Executive Committee decision {decision_reference.strip()} recorded. {decision_reasons.strip()}",
     )
     return decision
+
+
+def validate_sac_appeal_filing(
+    decision: ExecutiveCommitteeDecision | None,
+    existing_appeal: SACAppeal | None,
+    now: datetime,
+) -> None:
+    """Enforce a single appeal within seven days of Speaking Order upload."""
+    if decision is None:
+        raise HTTPException(status_code=409, detail="An uploaded Executive Committee decision is required before an appeal can be filed.")
+    if existing_appeal is not None:
+        raise HTTPException(status_code=409, detail="An appeal has already been filed against this Executive Committee decision.")
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Appeal filing time must include a timezone.")
+    if now < decision.speaking_order_uploaded_at:
+        raise HTTPException(status_code=409, detail="Appeal filing cannot precede the Speaking Order upload.")
+    if now > decision.appeal_deadline_at:
+        raise HTTPException(status_code=409, detail="The seven-day appeal filing period has ended.")
+
+
+def file_sac_appeal(
+    db: Session,
+    case: WorkflowCase,
+    actor_user_id: uuid.UUID,
+    *,
+    appeal_reference: str | None,
+    appeal_grounds: str,
+    supporting_material_reference: str,
+) -> SACAppeal:
+    decision = db.scalar(
+        select(ExecutiveCommitteeDecision)
+        .where(ExecutiveCommitteeDecision.workflow_case_id == case.workflow_case_id)
+        .with_for_update()
+    )
+    existing = db.scalar(
+        select(SACAppeal)
+        .where(SACAppeal.executive_committee_decision_id == decision.executive_committee_decision_id)
+        .with_for_update()
+    ) if decision is not None else None
+    now = datetime.now(UTC)
+    validate_sac_appeal_filing(decision, existing, now)
+    assert decision is not None
+
+    shc_proceeding = db.scalar(
+        select(SHCProceeding).where(SHCProceeding.workflow_case_id == case.workflow_case_id)
+    )
+    appeal = SACAppeal(
+        executive_committee_decision_id=decision.executive_committee_decision_id,
+        workflow_case_id=case.workflow_case_id,
+        application_id=case.application_id,
+        shc_proceeding_id=shc_proceeding.shc_proceeding_id if shc_proceeding else None,
+        status="FILED",
+        appeal_reference=appeal_reference.strip() if appeal_reference else None,
+        appeal_grounds=appeal_grounds.strip(),
+        supporting_material_reference=supporting_material_reference.strip(),
+        filed_by=actor_user_id,
+        filed_at=now,
+        appeal_deadline_at=decision.appeal_deadline_at,
+    )
+    db.add(appeal)
+    db.flush()
+    add_workflow_event(
+        db,
+        case,
+        actor_user_id,
+        event_type="SAC_APPEAL_FILED",
+        summary="Institution appeal filed against Executive Committee decision " + decision.decision_reference + ".",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "executive_committee_decision_id": str(decision.executive_committee_decision_id),
+            "appeal_reference": appeal.appeal_reference,
+            "filed_at": now.isoformat(),
+            "appeal_deadline_at": appeal.appeal_deadline_at.isoformat(),
+            "shc_proceeding_id": str(appeal.shc_proceeding_id) if appeal.shc_proceeding_id else None,
+        },
+    )
+    return appeal
+
+
+def schedule_sac_hearing(
+    db: Session,
+    case: WorkflowCase,
+    appeal: SACAppeal,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    hearing_mode: str,
+    hearing_scheduled_at: datetime,
+    hearing_details: str,
+    official_schedule_reference: str | None,
+) -> SACAppeal:
+    if role_code != "SAC_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SAC Secretariat may record the appeal hearing schedule.")
+    if appeal.status not in {"FILED", "SCHEDULED"}:
+        raise HTTPException(status_code=409, detail="The SAC hearing can be scheduled or revised only before the hearing record is entered.")
+    now = datetime.now(UTC)
+    if hearing_scheduled_at.tzinfo is None or hearing_scheduled_at.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="SAC hearing schedule must include a timezone.")
+    if hearing_scheduled_at <= now:
+        raise HTTPException(status_code=422, detail="The SAC hearing must be scheduled for a future date and time.")
+    previous_at = appeal.hearing_scheduled_at.isoformat() if appeal.hearing_scheduled_at else None
+    event_type = "SAC_HEARING_RESCHEDULED" if appeal.status == "SCHEDULED" else "SAC_HEARING_SCHEDULED"
+    appeal.status = "SCHEDULED"
+    appeal.hearing_mode = hearing_mode
+    appeal.hearing_scheduled_at = hearing_scheduled_at.astimezone(UTC)
+    appeal.hearing_details = hearing_details.strip()
+    appeal.official_schedule_reference = official_schedule_reference.strip() if official_schedule_reference else None
+    appeal.schedule_revision += 1
+    appeal.updated_at = now
+    add_workflow_event(
+        db, case, actor_user_id, event_type=event_type,
+        summary=f"SAC appeal hearing {'rescheduled' if event_type == 'SAC_HEARING_RESCHEDULED' else 'scheduled'} for {appeal.hearing_scheduled_at.isoformat()}.",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "schedule_revision": appeal.schedule_revision,
+            "previous_hearing_at": previous_at,
+            "hearing_scheduled_at": appeal.hearing_scheduled_at.isoformat(),
+            "hearing_mode": hearing_mode,
+            "official_schedule_reference": appeal.official_schedule_reference,
+        },
+    )
+    return appeal
+
+
+def record_sac_bureau_observations(
+    db: Session,
+    case: WorkflowCase,
+    appeal: SACAppeal,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    observation_reference: str,
+    observations: str,
+) -> SACAppeal:
+    if role_code not in {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}:
+        raise HTTPException(status_code=403, detail="Only an authorised Regulation Bureau supervisory officer may record observations for SAC.")
+    if appeal.status not in {"FILED", "SCHEDULED", "HEARING_RECORDED"}:
+        raise HTTPException(status_code=409, detail="Regulation Bureau observations must be recorded before the SAC recommendation.")
+    now = datetime.now(UTC)
+    appeal.regulation_bureau_observation_reference = observation_reference.strip()
+    appeal.regulation_bureau_observations = observations.strip()
+    appeal.bureau_observations_recorded_by = actor_user_id
+    appeal.bureau_observations_recorded_at = now
+    appeal.updated_at = now
+    add_workflow_event(
+        db, case, actor_user_id, event_type="SAC_BUREAU_OBSERVATIONS_RECORDED",
+        summary="Regulation Bureau observations recorded for SAC consideration.",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "observation_reference": appeal.regulation_bureau_observation_reference,
+            "observations": appeal.regulation_bureau_observations,
+        },
+    )
+    return appeal
+
+
+def record_sac_hearing(
+    db: Session,
+    case: WorkflowCase,
+    appeal: SACAppeal,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    representative_one_name: str,
+    representative_one_designation: str,
+    representative_one_id_reference: str,
+    representative_two_name: str,
+    representative_two_designation: str,
+    representative_two_id_reference: str,
+    hearing_summary: str,
+) -> SACAppeal:
+    if role_code != "SAC_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SAC Secretariat may record the appeal hearing.")
+    if appeal.status != "SCHEDULED":
+        raise HTTPException(status_code=409, detail="A scheduled SAC hearing is required before recording appearances and proceedings.")
+    if appeal.hearing_scheduled_at is not None and appeal.hearing_scheduled_at > datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="The SAC hearing cannot be recorded before its scheduled date and time.")
+    if representative_one_name.strip().casefold() == representative_two_name.strip().casefold():
+        raise HTTPException(status_code=422, detail="Record the two authorised institution representatives separately.")
+    now = datetime.now(UTC)
+    appeal.status = "HEARING_RECORDED"
+    appeal.representative_one_name = representative_one_name.strip()
+    appeal.representative_one_designation = representative_one_designation.strip()
+    appeal.representative_one_id_reference = representative_one_id_reference.strip()
+    appeal.representative_one_id_self_attested = True
+    appeal.representative_two_name = representative_two_name.strip()
+    appeal.representative_two_designation = representative_two_designation.strip()
+    appeal.representative_two_id_reference = representative_two_id_reference.strip()
+    appeal.representative_two_id_self_attested = True
+    appeal.hearing_summary = hearing_summary.strip()
+    appeal.hearing_recorded_by = actor_user_id
+    appeal.hearing_recorded_at = now
+    appeal.updated_at = now
+    add_workflow_event(
+        db, case, actor_user_id, event_type="SAC_HEARING_RECORDED",
+        summary="SAC hearing record entered with two authorised institution representatives.",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "representatives": [
+                {"name": appeal.representative_one_name, "designation": appeal.representative_one_designation, "self_attested_id_reference": appeal.representative_one_id_reference},
+                {"name": appeal.representative_two_name, "designation": appeal.representative_two_designation, "self_attested_id_reference": appeal.representative_two_id_reference},
+            ],
+            "hearing_summary": appeal.hearing_summary,
+        },
+    )
+    return appeal
+
+
+def record_sac_recommendation(
+    db: Session,
+    case: WorkflowCase,
+    appeal: SACAppeal,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    recommendation_code: str,
+    recommendation_text: str,
+    recommendation_reference: str | None,
+) -> SACAppeal:
+    if role_code != "SAC_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised SAC Secretariat may record the committee recommendation.")
+    if appeal.status != "HEARING_RECORDED":
+        raise HTTPException(status_code=409, detail="Record the SAC hearing before entering its recommendation.")
+    now = datetime.now(UTC)
+    appeal.status = "RECOMMENDATION_RECORDED"
+    appeal.recommendation_code = recommendation_code
+    appeal.recommendation_text = recommendation_text.strip()
+    appeal.recommendation_reference = recommendation_reference.strip() if recommendation_reference else None
+    appeal.recommendation_recorded_by = actor_user_id
+    appeal.recommendation_recorded_at = now
+    appeal.updated_at = now
+    add_workflow_event(
+        db, case, actor_user_id, event_type="SAC_RECOMMENDATION_RECORDED",
+        summary="SAC recommendation recorded for the Council's final decision.",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "recommendation_code": recommendation_code,
+            "recommendation_reference": appeal.recommendation_reference,
+            "recommendation_text": appeal.recommendation_text,
+        },
+    )
+    return appeal
+
+
+def record_council_appeal_decision(
+    db: Session,
+    case: WorkflowCase,
+    appeal: SACAppeal,
+    actor_user_id: uuid.UUID,
+    role_code: str,
+    *,
+    outcome_code: str,
+    decision_reference: str,
+    decision_text: str,
+    decision_uploaded_at: datetime,
+) -> SACAppeal:
+    if role_code != "COUNCIL_SECRETARIAT":
+        raise HTTPException(status_code=403, detail="Only the authorised Council Secretariat may record the Council's final appeal decision.")
+    if appeal.status != "RECOMMENDATION_RECORDED":
+        raise HTTPException(status_code=409, detail="The SAC recommendation must be recorded before the Council decision.")
+    if decision_uploaded_at.tzinfo is None or decision_uploaded_at.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Council decision upload time must include a timezone.")
+    now = datetime.now(UTC)
+    uploaded_at = decision_uploaded_at.astimezone(UTC)
+    if uploaded_at > now:
+        raise HTTPException(status_code=422, detail="Council decision upload time cannot be in the future.")
+    if appeal.recommendation_recorded_at and uploaded_at < appeal.recommendation_recorded_at:
+        raise HTTPException(status_code=422, detail="Council decision upload time cannot precede the SAC recommendation.")
+    appeal.status = "COUNCIL_DECISION_RECORDED"
+    appeal.council_outcome_code = outcome_code
+    appeal.council_decision_reference = decision_reference.strip()
+    appeal.council_decision_text = decision_text.strip()
+    appeal.council_decision_uploaded_at = uploaded_at
+    appeal.council_decision_recorded_by = actor_user_id
+    appeal.council_decision_recorded_at = now
+    appeal.updated_at = now
+    add_workflow_event(
+        db, case, actor_user_id, event_type="COUNCIL_APPEAL_DECISION_RECORDED",
+        summary=f"Council appeal decision recorded as {outcome_code.replace('_', ' ')}.",
+        event_payload={
+            "sac_appeal_id": str(appeal.sac_appeal_id),
+            "outcome_code": outcome_code,
+            "decision_reference": appeal.council_decision_reference,
+            "decision_uploaded_at": uploaded_at.isoformat(),
+            "decision_text": appeal.council_decision_text,
+        },
+    )
+    return appeal
 
 
 def validate_shc_stage(case: WorkflowCase) -> None:
