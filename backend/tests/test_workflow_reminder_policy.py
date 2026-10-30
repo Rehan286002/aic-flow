@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -73,3 +73,14 @@ def test_celery_beat_runs_the_deadline_reminder_cycle_every_fifteen_minutes():
     schedule = celery_app.conf.beat_schedule["dispatch-workflow-deadline-reminders"]
     assert schedule["task"] == "app.tasks.workflow_reminders.dispatch_due_notifications"
     assert schedule["schedule"] == 900.0
+
+
+
+def test_document_validity_reminder_dates_use_midnight_india_time():
+    from zoneinfo import ZoneInfo
+
+    due_date = date(2026, 12, 31)
+    trigger = reminder_trigger_at(due_date, -90)
+    assert trigger.tzinfo == ZoneInfo("Asia/Kolkata")
+    assert trigger.date() == date(2026, 10, 2)
+    assert reminder_is_due(due_date, -90, trigger)
