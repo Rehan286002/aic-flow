@@ -1015,6 +1015,54 @@ def list_obligations(
     return [ComplianceObligationResponse.model_validate(item) for item, _application in rows]
 
 
+@router.post("/cases/{workflow_case_id}/document-validity/upload/{requirement_id}", response_model=DocumentUploadResponse)
+async def upload_document_validity_source(
+    workflow_case_id: uuid.UUID,
+    requirement_id: uuid.UUID,
+    file: Annotated[UploadFile, File(...)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentUploadResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "INSTITUTION_USER":
+        raise HTTPException(status_code=403, detail="Only the institution may upload a renewed lease or regulatory certificate.")
+    requirement = db.get(ApplicationRequirement, requirement_id)
+    if (
+        requirement is None
+        or requirement.application_revision_id != application.current_revision_id
+        or requirement.applicability_status != "APPLICABLE"
+    ):
+        raise HTTPException(status_code=422, detail="Choose an applicable document requirement from this application's current revision.")
+
+    upload_response = await document_upload_service.upload_document(
+        db=db,
+        application_requirement_id=requirement_id,
+        user=current_user,
+        upload_file=file,
+        update_requirement_status=False,
+    )
+    if upload_response.document_version.is_clean:
+        add_workflow_event(
+            db,
+            case,
+            current_user.user_id,
+            event_type="DOCUMENT_VALIDITY_REPLACEMENT_UPLOADED",
+            summary="A renewed lease or regulatory document version was uploaded for validity review.",
+            event_payload={
+                "application_requirement_id": str(requirement_id),
+                "document_id": str(upload_response.document_version.document_id),
+                "document_version_id": str(upload_response.document_version.document_version_id),
+                "filename": upload_response.document_version.original_filename,
+                "version_number": upload_response.document_version.version_number,
+                "sha256_hex": upload_response.document_version.sha256_hex,
+            },
+        )
+        db.commit()
+    return upload_response
+
+
 @router.post("/cases/{workflow_case_id}/document-validity", response_model=DocumentValidityResponse, status_code=status.HTTP_201_CREATED)
 def submit_case_document_validity(
     workflow_case_id: uuid.UUID,
