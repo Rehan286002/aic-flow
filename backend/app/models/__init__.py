@@ -51,6 +51,7 @@ from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.in_app_notification import InAppNotification
+from app.models.workflow_reminder import WorkflowReminderPolicy, WorkflowReminderDispatch
 
 # Validation engine and evidence intelligence
 from app.models.validation_run import ValidationRun
@@ -110,6 +111,8 @@ __all__ = [
     "WorkflowEvent",
     "ComplianceObligation",
     "InAppNotification",
+    "WorkflowReminderPolicy",
+    "WorkflowReminderDispatch",
     # Validation engine and evidence intelligence
     "ValidationRun",
     "ValidationRunRuleVersion",
