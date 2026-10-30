@@ -169,9 +169,12 @@ def _latest_clean_document_version(
         .limit(1)
         .scalar_subquery()
     )
-    latest_version_number = (
+    latest_clean_version_number = (
         select(func.max(DocumentVersion.version_number))
-        .where(DocumentVersion.document_id == Document.document_id)
+        .where(
+            DocumentVersion.document_id == Document.document_id,
+            latest_scan == "CLEAN",
+        )
         .scalar_subquery()
     )
     row = db.execute(
@@ -191,7 +194,7 @@ def _latest_clean_document_version(
             ApplicationDocumentLink.uploaded_for_requirement_id == requirement.application_requirement_id,
             ApplicationRevision.application_id == application.application_id,
             ApplicationRevision.application_revision_id == application.current_revision_id,
-            DocumentVersion.version_number == latest_version_number,
+            DocumentVersion.version_number == latest_clean_version_number,
             latest_scan == "CLEAN",
         )
         .limit(1)
