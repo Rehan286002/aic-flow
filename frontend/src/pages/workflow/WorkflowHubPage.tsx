@@ -938,6 +938,128 @@ export default function WorkflowHubPage() {
               </div>
             </section>}
 
+
+            {selected.executive_committee_decision && <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-violet-700"><Gavel className="size-4"/> Standing Appellate Committee</div>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900">Institution appeal &amp; Council decision</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">A separate appeal record linked to the Executive Committee decision above.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-700">{selected.sac_appeal ? stageLabel(selected.sac_appeal.status) : 'Appeal not filed'}</span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Executive Committee decision</div>
+                  <p className="mt-1 text-xs font-semibold text-slate-900">{selected.executive_committee_decision.decision_reference}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Speaking Order uploaded {dateTimeLabel(selected.executive_committee_decision.speaking_order_uploaded_at)}</p>
+                </div>
+                <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-violet-700">Last date for appeal</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{dateTimeLabel(selected.executive_committee_decision.appeal_deadline_at)}</p>
+                  <p className="mt-1 text-[10px] text-slate-500">Seven days from the date and time the decision was uploaded.</p>
+                </div>
+              </div>
+
+              {!selected.sac_appeal && role === 'INSTITUTION_USER' && Date.now() <= new Date(selected.executive_committee_decision.appeal_deadline_at).getTime() && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">File an appeal to the Council</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">The appeal will be considered by the Standing Appellate Committee. Enter the grounds and references for supporting compliance material.</p>
+                <label className="mt-3 grid gap-1 text-[11px] font-medium text-slate-600">Appeal / portal reference (optional)
+                  <input value={sacAppealReference} onChange={(e) => setSacAppealReference(e.target.value)} placeholder="Reference received from the appeal portal, if available" className="h-9 rounded-lg border border-slate-200 px-3 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Grounds of appeal
+                  <textarea value={sacAppealGrounds} onChange={(e) => setSacAppealGrounds(e.target.value)} rows={4} placeholder="Explain why the institution is aggrieved by the Executive Committee decision" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">Supporting compliance material references
+                  <textarea value={sacSupportingMaterialReference} onChange={(e) => setSacSupportingMaterialReference(e.target.value)} rows={3} placeholder="List supporting document references, acknowledgements and compliance evidence to be presented before SAC" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                </label>
+                <button onClick={() => void fileSacAppeal()} disabled={busy} className="mt-3 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Submit appeal</button>
+              </div>}
+
+              {selected.sac_appeal && <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div><h4 className="text-sm font-semibold text-slate-900">Appeal record</h4><p className="mt-0.5 text-[11px] text-slate-500">Filed {dateTimeLabel(selected.sac_appeal.filed_at)} · {selected.sac_appeal.appeal_reference || 'Portal reference not provided'}</p></div>
+                  <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-700">{stageLabel(selected.sac_appeal.status)}</span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-100 p-3"><div className="text-[10px] font-semibold uppercase text-slate-500">Grounds of appeal</div><p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.appeal_grounds}</p></div>
+                  <div className="rounded-lg border border-slate-100 p-3"><div className="text-[10px] font-semibold uppercase text-slate-500">Supporting material</div><p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.supporting_material_reference}</p><p className="mt-2 text-[10px] text-slate-500">Appeal deadline: {dateTimeLabel(selected.sac_appeal.appeal_deadline_at)}</p></div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500"><CalendarClock className="size-3.5"/> SAC hearing schedule</div><span className="text-[10px] text-slate-400">Revision {selected.sac_appeal.schedule_revision}</span></div>
+                  {selected.sac_appeal.hearing_scheduled_at ? <><p className="mt-1 text-sm font-semibold text-slate-900">{dateTimeLabel(selected.sac_appeal.hearing_scheduled_at)}</p><p className="mt-0.5 text-xs text-slate-600">{selected.sac_appeal.hearing_mode === 'IN_PERSON' ? 'In person' : selected.sac_appeal.hearing_mode} · {selected.sac_appeal.hearing_details}</p><p className="mt-1 break-all text-[10px] text-slate-500">Official schedule reference: {selected.sac_appeal.official_schedule_reference || 'Not provided'}</p></> : <p className="mt-1 text-xs text-slate-500">The SAC hearing schedule has not yet been recorded.</p>}
+                  {role === 'SAC_SECRETARIAT' && ['FILED','SCHEDULED'].includes(selected.sac_appeal.status) && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Hearing mode<select value={sacHearingMode} onChange={(e) => setSacHearingMode(e.target.value as 'ONLINE' | 'IN_PERSON')} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="ONLINE">Online</option><option value="IN_PERSON">In person</option></select></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Hearing date and time<input type="datetime-local" value={sacHearingAt} onChange={(e) => setSacHearingAt(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600 sm:col-span-2">Official schedule reference (optional)<input value={sacOfficialScheduleReference} onChange={(e) => setSacOfficialScheduleReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600 sm:col-span-2">Hearing details<textarea value={sacHearingDetails} onChange={(e) => setSacHearingDetails(e.target.value)} rows={2} placeholder="Enter the schedule information notified for the SAC hearing" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/></label>
+                    <button onClick={() => void scheduleSacHearing()} disabled={busy} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 sm:col-span-2">{selected.sac_appeal.status === 'SCHEDULED' ? 'Save revised schedule' : 'Record SAC hearing schedule'}</button>
+                  </div>}
+                </div>
+
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Regulation Bureau observations</div>
+                  {selected.sac_appeal.regulation_bureau_observations ? <><p className="mt-1 text-xs font-semibold text-slate-800">{selected.sac_appeal.regulation_bureau_observation_reference}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.regulation_bureau_observations}</p><p className="mt-1 text-[10px] text-slate-400">Recorded {dateTimeLabel(selected.sac_appeal.bureau_observations_recorded_at)}</p></> : <p className="mt-1 text-xs text-slate-500">No Regulation Bureau observations have been recorded for this appeal.</p>}
+                  {['BUREAU_SUPERVISOR','REGIONAL_OFFICER','LEAD_AUDITOR'].includes(role) && ['FILED','SCHEDULED','HEARING_RECORDED'].includes(selected.sac_appeal.status) && <div className="mt-3 space-y-2">
+                    <input value={sacBureauObservationReference} onChange={(e) => setSacBureauObservationReference(e.target.value)} placeholder="Observation reference" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs"/>
+                    <textarea value={sacBureauObservations} onChange={(e) => setSacBureauObservations(e.target.value)} rows={3} placeholder="Record Regulation Bureau observations to be placed before SAC" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                    <button onClick={() => void recordSacBureauObservations()} disabled={busy} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Save Bureau observations</button>
+                  </div>}
+                </div>
+
+                {selected.sac_appeal.hearing_recorded_at && <div className="rounded-lg border border-slate-100 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-slate-500">Institution representatives &amp; SAC hearing</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div><p className="text-xs font-semibold text-slate-900">{selected.sac_appeal.representative_one_name}</p><p className="text-[11px] text-slate-500">{selected.sac_appeal.representative_one_designation}</p>{['INSTITUTION_USER','SAC_SECRETARIAT','COUNCIL_SECRETARIAT'].includes(role) && <p className="mt-1 text-[10px] text-slate-500">Self-attested ID proof: {selected.sac_appeal.representative_one_id_reference}</p>}</div>
+                    <div><p className="text-xs font-semibold text-slate-900">{selected.sac_appeal.representative_two_name}</p><p className="text-[11px] text-slate-500">{selected.sac_appeal.representative_two_designation}</p>{['INSTITUTION_USER','SAC_SECRETARIAT','COUNCIL_SECRETARIAT'].includes(role) && <p className="mt-1 text-[10px] text-slate-500">Self-attested ID proof: {selected.sac_appeal.representative_two_id_reference}</p>}</div>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.hearing_summary}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Hearing recorded {dateTimeLabel(selected.sac_appeal.hearing_recorded_at)}</p>
+                </div>}
+
+                {role === 'SAC_SECRETARIAT' && selected.sac_appeal.status === 'SCHEDULED' && selected.sac_appeal.hearing_scheduled_at && new Date(selected.sac_appeal.hearing_scheduled_at).getTime() <= Date.now() && <div className="rounded-lg border border-slate-200 p-3">
+                  <h4 className="text-sm font-semibold text-slate-900">Record SAC hearing</h4>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Record two applicant representatives and the material presented before the Committee.</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 1 name<input value={sacRepOneName} onChange={(e) => setSacRepOneName(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 1 designation<input value={sacRepOneDesignation} onChange={(e) => setSacRepOneDesignation(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 1 self-attested ID proof reference<input value={sacRepOneIdReference} onChange={(e) => setSacRepOneIdReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={sacRepOneIdSelfAttested} onChange={(e) => setSacRepOneIdSelfAttested(e.target.checked)}/> ID proof is self-attested</label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 2 name<input value={sacRepTwoName} onChange={(e) => setSacRepTwoName(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 2 designation<input value={sacRepTwoDesignation} onChange={(e) => setSacRepTwoDesignation(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Representative 2 self-attested ID proof reference<input value={sacRepTwoIdReference} onChange={(e) => setSacRepTwoIdReference(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={sacRepTwoIdSelfAttested} onChange={(e) => setSacRepTwoIdSelfAttested(e.target.checked)}/> ID proof is self-attested</label>
+                  </div>
+                  <label className="mt-2 grid gap-1 text-[11px] font-medium text-slate-600">SAC hearing summary<textarea value={sacHearingSummary} onChange={(e) => setSacHearingSummary(e.target.value)} rows={4} placeholder="Record the institution's presentation and supporting compliance material considered by SAC" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/></label>
+                  <button onClick={() => void recordSacHearing()} disabled={busy} className="mt-3 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save SAC hearing record</button>
+                </div>}
+
+                {selected.sac_appeal.hearing_recorded_at && <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-violet-700">SAC recommendation to Council</div>
+                  {selected.sac_appeal.recommendation_recorded_at ? <><p className="mt-1 text-xs font-semibold text-slate-900">{stageLabel(selected.sac_appeal.recommendation_code || '')}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.recommendation_text}</p><p className="mt-1 text-[10px] text-slate-500">Reference: {selected.sac_appeal.recommendation_reference || 'Not provided'} · Recorded {dateTimeLabel(selected.sac_appeal.recommendation_recorded_at)}</p></> : <p className="mt-1 text-xs text-slate-500">Recommendation not yet recorded.</p>}
+                  {role === 'SAC_SECRETARIAT' && selected.sac_appeal.status === 'HEARING_RECORDED' && <div className="mt-3 space-y-2">
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Recommendation<select value={sacRecommendationCode} onChange={(e) => setSacRecommendationCode(e.target.value as typeof sacRecommendationCode)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="RECOMMEND_TO_COUNCIL">Recommend to Council</option><option value="NOT_RECOMMEND_TO_COUNCIL">Not recommend to Council</option><option value="FURTHER_REVIEW_REQUIRED">Further review required</option></select></label>
+                    <textarea value={sacRecommendationText} onChange={(e) => setSacRecommendationText(e.target.value)} rows={4} placeholder="Record the SAC recommendation and reasons for the Council" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                    <input value={sacRecommendationReference} onChange={(e) => setSacRecommendationReference(e.target.value)} placeholder="Recommendation reference (optional)" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs"/>
+                    <button onClick={() => void recordSacRecommendation()} disabled={busy} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Submit SAC recommendation to Council</button>
+                  </div>}
+                </div>}
+
+                {selected.sac_appeal.recommendation_recorded_at && <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+                  <div className="text-[10px] font-semibold uppercase text-emerald-700">Council final decision</div>
+                  {selected.sac_appeal.council_decision_recorded_at ? <><p className="mt-1 text-xs font-semibold text-slate-900">{stageLabel(selected.sac_appeal.council_outcome_code || '')}</p><p className="mt-1 text-xs font-semibold text-slate-800">{selected.sac_appeal.council_decision_reference}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{selected.sac_appeal.council_decision_text}</p><p className="mt-1 text-[10px] text-slate-500">Uploaded {dateTimeLabel(selected.sac_appeal.council_decision_uploaded_at)}</p></> : <p className="mt-1 text-xs text-slate-500">Council decision not yet recorded.</p>}
+                  {role === 'COUNCIL_SECRETARIAT' && selected.sac_appeal.status === 'RECOMMENDATION_RECORDED' && <div className="mt-3 space-y-2">
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Council outcome<select value={councilOutcome} onChange={(e) => setCouncilOutcome(e.target.value as typeof councilOutcome)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="UPHOLD_EXECUTIVE_COMMITTEE">Uphold Executive Committee decision</option><option value="SET_ASIDE_EXECUTIVE_COMMITTEE">Set aside Executive Committee decision</option><option value="MODIFY_EXECUTIVE_COMMITTEE">Modify Executive Committee decision</option><option value="REMAND_FOR_RECONSIDERATION">Remand for reconsideration</option></select></label>
+                    <input value={councilDecisionReference} onChange={(e) => setCouncilDecisionReference(e.target.value)} placeholder="Council decision reference" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs"/>
+                    <label className="grid gap-1 text-[11px] font-medium text-slate-600">Decision upload date and time<input type="datetime-local" value={councilDecisionUploadedAt} onChange={(e) => setCouncilDecisionUploadedAt(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                    <textarea value={councilDecisionText} onChange={(e) => setCouncilDecisionText(e.target.value)} rows={4} placeholder="Record the Council's final decision and reasons" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                    <button onClick={() => void recordCouncilAppealDecision()} disabled={busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Record Council final decision</button>
+                  </div>}
+                </div>}
+              </div>}
+            </section>}
+
             {role === 'COMPETENT_AUTHORITY' && selected.current_stage === 'AWAITING_AUTHORITY' && !selected.executive_committee_decision && <section className="rounded-xl border border-indigo-200 bg-white p-4">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-indigo-700"><Gavel className="size-4"/> Executive Committee decision</div>
               <h3 className="mt-1 text-base font-semibold text-slate-900">Record authorised outcome</h3>
