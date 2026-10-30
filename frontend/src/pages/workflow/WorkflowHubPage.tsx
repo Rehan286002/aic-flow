@@ -117,6 +117,7 @@ export default function WorkflowHubPage() {
   const [councilDecisionUploadedAt, setCouncilDecisionUploadedAt] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadObligationId, setUploadObligationId] = useState<string | null>(null);
+  const [uploadValidityCaseId, setUploadValidityCaseId] = useState<string | null>(null);
   const [obligationEvidenceRequirementIds, setObligationEvidenceRequirementIds] = useState<Record<string, string>>({});
   const [uploadOpen, setUploadOpen] = useState(false);
   const [validityRequirementId, setValidityRequirementId] = useState('');
@@ -180,8 +181,8 @@ export default function WorkflowHubPage() {
       .then((history) => {
         if (!active) return;
         setValidityHistory(history);
-        const cleanVersion = history.versions.find((version) => version.is_clean);
-        setValidityDocumentVersionId(cleanVersion?.document_version_id || '');
+        const activeVersion = history.active_version_id ? history.versions.find((version) => version.document_version_id === history.active_version_id) : null;
+        setValidityDocumentVersionId(activeVersion?.document_version_id || '');
       })
       .catch((err) => {
         if (active) {
@@ -656,6 +657,18 @@ export default function WorkflowHubPage() {
     }
   };
 
+  const refreshValidityHistory = async (requirementId: string) => {
+    try {
+      const history = await documentsApi.getHistory(requirementId);
+      setValidityHistory(history);
+      setValidityDocumentVersionId(history.active_version_id || '');
+    } catch (err) {
+      setValidityHistory(null);
+      setValidityDocumentVersionId('');
+      toast.error(err instanceof Error ? err.message : 'Could not refresh document version history.');
+    }
+  };
+
   const submitDocumentValidity = async () => {
     if (!selected || !validityRequirementId || !validityDocumentVersionId || validityBasisReference.trim().length < 5) {
       toast.error('Choose an uploaded clean document and enter its validity source.');
@@ -750,6 +763,9 @@ export default function WorkflowHubPage() {
     if (selected) {
       try { setSelected(await workflowApi.detail(selected.workflow_case_id)); }
       catch { /* Keep the current dossier visible; the next refresh will reload it. */ }
+    }
+    if (validityRequirementId === response.application_requirement_id) {
+      await refreshValidityHistory(validityRequirementId);
     }
     await refresh();
   };
@@ -1250,6 +1266,79 @@ export default function WorkflowHubPage() {
 
             {selected.requirements.length > 0 && <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold text-slate-900">Application evidence checklist</h3><p className="mt-0.5 text-xs text-slate-500">Documents and requirement states linked to this application.</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{selected.requirements.length} items</span></div><div className="mt-3 divide-y divide-slate-100">{selected.requirements.map((req) => { const canUpload = role === 'INSTITUTION_USER' && ['DRAFT', 'CLARIFICATION_REQUESTED'].includes(selected.current_stage) && req.applicability_status !== 'NOT_APPLICABLE' && req.status !== 'SATISFIED'; return <div key={req.application_requirement_id} className="flex flex-wrap items-center justify-between gap-3 py-2.5"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[10px] font-semibold text-slate-500">{req.item_code}</span><span className="text-sm font-medium text-slate-800">{req.title}</span></div><p className="mt-0.5 text-[11px] text-slate-500">{stageLabel(req.status)} · {stageLabel(req.applicability_status)}{req.determination_reason ? ` · ${req.determination_reason}` : ''}</p></div>{canUpload && <button onClick={() => { setUploadRequirement(req); setUploadObligationId(null); setUploadOpen(true); }} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Upload evidence</button>}</div>; })}</div></div>}
 
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2"><FileCheck className="size-4 text-indigo-600"/><h3 className="font-semibold text-slate-900">Lease &amp; regulatory-document validity</h3></div>
+                  <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-500">Validity dates are submitted against an exact clean-scanned document version and become active only after an authorised officer verifies them. Upload a replacement version to record a renewal; the earlier verified record remains in the history as superseded.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{selected.document_validity_records.filter((item) => item.status === 'VERIFIED').length} verified records</span>
+              </div>
+
+              {selected.document_validity_records.length === 0 ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">No lease or document-validity records have been submitted for this application.</p> : <div className="mt-3 space-y-2">
+                {selected.document_validity_records.map((record) => <div key={record.document_validity_record_id} className="rounded-lg border border-slate-100 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div><div className="text-sm font-semibold text-slate-900">{stageLabel(record.validity_type)}</div><div className="mt-0.5 break-all font-mono text-[10px] text-slate-400">Document version {record.document_version_id.slice(0, 8)}… · Submitted {dateTimeLabel(record.submitted_at)}</div></div>
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${record.status === 'VERIFIED' ? 'bg-emerald-50 text-emerald-700' : record.status === 'RETURNED' ? 'bg-amber-50 text-amber-700' : record.status === 'SUPERSEDED' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-700'}`}>{stageLabel(record.status)}</span>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {record.validity_type === 'LEASE_DEED' ? <>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">Lease period</div><div className="mt-1 text-xs font-medium text-slate-800">{dateLabel(record.lease_start_date)} – {dateLabel(record.lease_end_date)}</div></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">Minimum 30-year term</div><div className={`mt-1 text-xs font-semibold ${record.lease_minimum_term_met ? 'text-emerald-700' : 'text-amber-700'}`}>{record.lease_minimum_term_met === null ? 'Not assessed' : record.lease_minimum_term_met ? 'Threshold met' : 'Below 30 years'}</div></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">Live term at application</div><div className={`mt-1 text-xs font-semibold ${record.lease_live_term_met_at_submission ? 'text-emerald-700' : 'text-amber-700'}`}>{record.lease_live_term_met_at_submission === null ? 'Submission date not available' : record.lease_live_term_met_at_submission ? 'Covers longest course duration' : 'Below longest course duration'}{record.lease_eoa_cutoff_year_triggered ? ' · EoA cutoff year' : ''}</div></div>
+                    </> : <>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">Issue date</div><div className="mt-1 text-xs font-medium text-slate-800">{dateLabel(record.issue_date)}</div></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">{record.validity_type === 'BUILDING_COMPLETION_CERTIFICATE' ? '30-year structural review trigger' : 'Valid until'}</div><div className="mt-1 text-xs font-medium text-slate-800">{dateLabel(record.valid_until || record.review_due_at)}</div></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-[10px] uppercase text-slate-500">Validity basis</div><div className="mt-1 line-clamp-2 text-xs text-slate-700">{record.validity_basis_reference}</div></div>
+                    </>}
+                  </div>
+                  {record.review_note && <p className="mt-2 text-xs text-slate-600">Officer note: {record.review_note}</p>}
+                  {['SCRUTINY_OFFICER','AUDITOR','LEAD_AUDITOR','BUREAU_SUPERVISOR','REGIONAL_OFFICER'].includes(role) && record.status === 'PENDING_REVIEW' && <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                    <textarea value={validityReviewNotes[record.document_validity_record_id] || ''} onChange={(event) => setValidityReviewNotes((items) => ({ ...items, [record.document_validity_record_id]: event.target.value }))} rows={2} placeholder="Record the date check, supporting rule/source review or the correction required" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+                    <div className="flex flex-wrap gap-2"><button onClick={() => void reviewDocumentValidity(record.document_validity_record_id, 'VERIFY')} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Verify validity dates</button><button onClick={() => void reviewDocumentValidity(record.document_validity_record_id, 'RETURN')} disabled={busy} className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50">Return for correction</button></div>
+                  </div>}
+                </div>)}
+              </div>}
+
+              {role === 'INSTITUTION_USER' && <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">Register or renew document validity</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">Choose the relevant requirement. Upload a new version where a lease or certificate has been renewed, then record its dates and source.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Application document requirement
+                    <select value={validityRequirementId} onChange={(event) => setValidityRequirementId(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
+                      <option value="">Select requirement</option>
+                      {selected.requirements.filter((req) => req.applicability_status === 'APPLICABLE').map((req) => <option key={req.application_requirement_id} value={req.application_requirement_id}>{req.item_code} · {req.title}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Validity category
+                    <select value={validityType} onChange={(event) => setValidityType(event.target.value as DocumentValidityRecord['validity_type'])} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
+                      <option value="LEASE_DEED">Land / lease deed</option>
+                      <option value="BUILDING_COMPLETION_CERTIFICATE">Building Completion Certificate</option>
+                      <option value="STRUCTURAL_STABILITY_CERTIFICATE">Structural Stability Certificate</option>
+                      <option value="FIRE_SAFETY_CERTIFICATE">Fire Safety Certificate</option>
+                      <option value="ISSUER_DATED_DOCUMENT">Other issuer-dated document</option>
+                    </select>
+                  </label>
+                </div>
+                {validityRequirementId && <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-[11px] font-semibold text-slate-700">Selected document version</div><div className="mt-0.5 text-[10px] text-slate-500">{validityHistoryLoading ? 'Loading upload history…' : validityHistory ? validityDocumentVersionId ? validityHistory.versions.find((version) => version.document_version_id === validityDocumentVersionId)?.original_filename || 'Latest clean upload' : 'Latest upload is not clean-scanned or no file is uploaded yet' : 'Upload history unavailable'}</div></div><button onClick={() => { const req = selected.requirements.find((item) => item.application_requirement_id === validityRequirementId); if (!req) return; setUploadRequirement(req); setUploadObligationId(null); setUploadValidityCaseId(selected.workflow_case_id); setUploadOpen(true); }} disabled={validityHistoryLoading} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-semibold text-indigo-700 disabled:opacity-50">Upload / replace document</button></div>
+                  {validityHistory && validityHistory.versions.length > 0 && <div className="mt-2 text-[10px] text-slate-500">{validityHistory.versions.length} uploaded version(s) · {validityHistory.versions[0].is_clean ? 'Latest version passed safety scan' : 'Latest version has not passed safety scan'}</div>}
+                </div>}
+                {validityType === 'LEASE_DEED' ? <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Lease start date<input type="date" value={leaseStartDate} onChange={(event) => setLeaseStartDate(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Lease end date<input type="date" value={leaseEndDate} onChange={(event) => setLeaseEndDate(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600 sm:col-span-2">Longest programme duration (years)<input type="number" min={1} max={20} value={maximumCourseDurationYears} onChange={(event) => setMaximumCourseDurationYears(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                </div> : <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-[11px] font-medium text-slate-600">Document issue date<input type="date" value={validityIssueDate} onChange={(event) => setValidityIssueDate(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>
+                  {['FIRE_SAFETY_CERTIFICATE','ISSUER_DATED_DOCUMENT'].includes(validityType) && <label className="grid gap-1 text-[11px] font-medium text-slate-600">Expiry date from issuing authority<input type="date" value={validityUntil} onChange={(event) => setValidityUntil(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs"/></label>}
+                </div>}
+                <label className="mt-3 grid gap-1 text-[11px] font-medium text-slate-600">Validity source / regulatory basis<input value={validityBasisReference} onChange={(event) => setValidityBasisReference(event.target.value)} placeholder="Issuing authority, document clause or APH reference" className="h-9 rounded-lg border border-slate-200 px-3 text-xs"/></label>
+                <button onClick={() => void submitDocumentValidity()} disabled={busy || !validityDocumentVersionId || !validityRequirementId || validityHistoryLoading} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Submit dates for officer review</button>
+                {validityType === 'STRUCTURAL_STABILITY_CERTIFICATE' && <p className="mt-2 text-[10px] text-slate-500">The five-year end date is calculated from the issue date under APH 2024–27; the issuing authority's date is not manually overridden.</p>}
+                {validityType === 'BUILDING_COMPLETION_CERTIFICATE' && <p className="mt-2 text-[10px] text-slate-500">The 30-year Structural Stability Certificate trigger is calculated from the Completion Certificate issue date.</p>}
+              </div>}
+            </section>
+
             <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2"><Clock3 className="size-4 text-indigo-600"/><h3 className="font-semibold text-slate-900">Evidence-to-resolution timeline</h3></div><div className="mt-3 space-y-3">{selected.events.map((event) => <div key={event.workflow_event_id} className="relative border-l-2 border-indigo-100 pl-3"><div className="text-xs font-semibold text-slate-800">{event.event_type.replace('COMMITTEE_', 'SHC ').replaceAll('_', ' ')}</div><p className="mt-0.5 text-xs text-slate-600">{event.summary}</p><div className="mt-0.5 text-[10px] text-slate-400">{new Date(event.occurred_at).toLocaleString()}</div></div>)}</div></div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2"><ShieldCheck className="size-4 text-emerald-600"/><h3 className="font-semibold text-slate-900">Compliance obligations</h3></div>{selected.obligations.length === 0 ? <p className="mt-2 text-xs text-slate-500">No post-decision conditions recorded.</p> : <div className="mt-3 space-y-3">{selected.obligations.map((o) => <div key={o.obligation_id} className="rounded-lg border border-slate-100 p-3"><div className="flex items-start justify-between gap-2"><div className="text-sm font-semibold text-slate-800">{o.title}</div><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold">{stageLabel(o.status)}</span></div><p className="mt-1 text-xs text-slate-600">{o.description}</p><p className="mt-1 text-[11px] text-slate-400">Due {dateLabel(o.due_at)} · {o.source_condition}</p>{o.evidence_document_version_id && <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2"><p className="truncate text-[11px] font-medium text-slate-700">Submitted: {o.evidence_reference || 'Evidence document'}</p><a href={workflowApi.getObligationEvidenceDownloadUrl(o.obligation_id)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900"><FileCheck className="size-3.5"/> View submitted evidence file</a></div>}{role === 'INSTITUTION_USER' && ['OPEN','RETURNED'].includes(o.status) && <div className="mt-3 space-y-2"><label className="grid gap-1 text-[11px] font-medium text-slate-600">Document type<select value={obligationEvidenceRequirementIds[o.obligation_id] || ''} onChange={(e) => setObligationEvidenceRequirementIds((prev) => ({ ...prev, [o.obligation_id]: e.target.value }))} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="">Select an applicable application requirement</option>{selected.requirements.filter((req) => req.applicability_status === 'APPLICABLE').map((req) => <option key={req.application_requirement_id} value={req.application_requirement_id}>{req.item_code} · {req.title}</option>)}</select></label><button onClick={() => { const req = selected.requirements.find((item) => item.application_requirement_id === obligationEvidenceRequirementIds[o.obligation_id]); if (!req) { toast.error('Select the document type for this evidence upload.'); return; } setUploadRequirement(req); setUploadObligationId(o.obligation_id); setUploadOpen(true); }} disabled={!obligationEvidenceRequirementIds[o.obligation_id]} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Upload condition evidence</button><div className="flex gap-2"><input value={evidenceReference} onChange={(e) => setEvidenceReference(e.target.value)} placeholder="External evidence reference (optional)" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs"/><button onClick={() => void obligationAction(o.obligation_id, 'EVIDENCE_SUBMITTED', evidenceReference)} disabled={!evidenceReference.trim()} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50">Submit reference</button></div></div>}{['SCRUTINY_OFFICER','AUDITOR','BUREAU_SUPERVISOR','LEAD_AUDITOR'].includes(role) && ['EVIDENCE_SUBMITTED','UNDER_VERIFICATION'].includes(o.status) && <div className="mt-2 flex gap-2">{o.status === 'EVIDENCE_SUBMITTED' && <button onClick={() => void obligationAction(o.obligation_id, 'START_VERIFICATION')} className="rounded border px-2 py-1 text-xs">Start review</button>}<button onClick={() => void obligationAction(o.obligation_id, 'VERIFY')} className="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Verify</button><button onClick={() => void obligationAction(o.obligation_id, 'RETURN')} className="rounded border border-amber-300 px-2 py-1 text-xs">Return</button></div>}{o.status === 'VERIFIED' && ['BUREAU_SUPERVISOR','REGIONAL_OFFICER','LEAD_AUDITOR'].includes(role) && <button onClick={() => void obligationAction(o.obligation_id, 'CLOSE')} className="mt-2 rounded bg-slate-900 px-2 py-1 text-xs font-semibold text-white">Close verified condition</button>}</div>)}</div>}</div>
@@ -1258,7 +1347,7 @@ export default function WorkflowHubPage() {
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2"><Bell className="size-4 text-indigo-600"/><h2 className="font-semibold text-slate-900">In-app notification centre</h2></div>{notifications.length === 0 ? <p className="mt-2 text-xs text-slate-500">No notifications yet. Case events generate persistent in-app alerts for authorised participants.</p> : <div className="mt-3 divide-y divide-slate-100">{notifications.slice(0,8).map((n) => <div key={n.notification_id} className="flex items-start justify-between gap-3 py-2"><div><div className="text-xs font-semibold text-slate-800">{n.title}</div><p className="mt-0.5 text-xs text-slate-600">{n.body}</p><div className="mt-0.5 text-[10px] text-slate-400">{new Date(n.created_at).toLocaleString()}</div></div>{!n.read_at && <button onClick={async () => { await workflowApi.markRead(n.notification_id); await refresh(); }} className="shrink-0 rounded border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600">Mark read</button>}</div>)}</div>}</section>
-      <DocumentUploadModal open={uploadOpen} onOpenChange={(open) => { setUploadOpen(open); if (!open) { setUploadRequirement(null); setUploadObligationId(null); } }} requirement={uploadRequirement} obligationId={uploadObligationId} onUploadSuccess={handleEvidenceUploaded}/>
+      <DocumentUploadModal open={uploadOpen} onOpenChange={(open) => { setUploadOpen(open); if (!open) { setUploadRequirement(null); setUploadObligationId(null); setUploadValidityCaseId(null); } }} requirement={uploadRequirement} obligationId={uploadObligationId} validityCaseId={uploadValidityCaseId} onUploadSuccess={handleEvidenceUploaded}/>
     </div>
   );
 }
