@@ -45,7 +45,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 COPY . /app
 
 # Change ownership to unprivileged user
-RUN chown -R appuser:appuser /app
+RUN mkdir -p /var/lib/aic-flow && chown -R appuser:appuser /app /var/lib/aic-flow
 
 USER appuser
 
