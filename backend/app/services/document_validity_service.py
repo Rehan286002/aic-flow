@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models.application import Application
 from app.models.application_document_link import ApplicationDocumentLink
@@ -169,11 +169,19 @@ def _latest_clean_document_version(
         .limit(1)
         .scalar_subquery()
     )
+    candidate_version = aliased(DocumentVersion)
+    candidate_latest_scan = (
+        select(DocumentSecurityScan.scan_status)
+        .where(DocumentSecurityScan.document_version_id == candidate_version.document_version_id)
+        .order_by(DocumentSecurityScan.scanned_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
     latest_clean_version_number = (
-        select(func.max(DocumentVersion.version_number))
+        select(func.max(candidate_version.version_number))
         .where(
-            DocumentVersion.document_id == Document.document_id,
-            latest_scan == "CLEAN",
+            candidate_version.document_id == Document.document_id,
+            candidate_latest_scan == "CLEAN",
         )
         .scalar_subquery()
     )
