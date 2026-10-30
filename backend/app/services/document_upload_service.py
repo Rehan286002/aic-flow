@@ -40,6 +40,47 @@ from app.services.storage_service import storage_service
 logger = logging.getLogger(__name__)
 
 
+DOCUMENT_TEAM_ROLES = {
+    "AUDITOR",
+    "LEAD_AUDITOR",
+    "INTAKE_OFFICER",
+    "SCRUTINY_OFFICER",
+    "REGIONAL_OFFICER",
+    "EVC_COORDINATOR",
+    "EVC_MEMBER",
+    "COMMITTEE_SECRETARIAT",
+    "SAC_SECRETARIAT",
+    "COUNCIL_SECRETARIAT",
+    "BUREAU_SUPERVISOR",
+    "COMPETENT_AUTHORITY",
+}
+
+
+def has_document_scope_access(
+    institution_id: UUID,
+    review_team_id: UUID | None,
+    role_contexts: list[object],
+) -> bool:
+    """Check document access against the institution or the application's active review team."""
+    for context in role_contexts:
+        role_code = getattr(context, "role_code", None)
+        context_institution_id = getattr(context, "institution_id", None)
+        context_review_team_id = getattr(context, "review_team_id", None)
+        if role_code == "ADMIN":
+            return True
+        if role_code == "INSTITUTION_USER" and context_institution_id == institution_id:
+            return True
+        if role_code == "INTAKE_OFFICER" and review_team_id is None:
+            return True
+        if (
+            role_code in DOCUMENT_TEAM_ROLES
+            and review_team_id is not None
+            and context_review_team_id == review_team_id
+        ):
+            return True
+    return False
+
+
 class DocumentUploadService:
     def __init__(self, scanner: BaseMalwareScanner | None = None):
         self._scanner = scanner
@@ -92,22 +133,17 @@ class DocumentUploadService:
                 detail="Application not found",
             )
 
-        # Check tenant isolation via validated active role contexts
+        # Check tenant and review-team isolation against validated active role contexts.
         active_contexts = get_active_role_assignments(user, db)
-        is_privileged = any(
-            c.role_code in ("AUDITOR", "LEAD_AUDITOR", "ADMIN") for c in active_contexts
-        )
-
-        if not is_privileged:
-            inst_context = next(
-                (c for c in active_contexts if c.role_code == "INSTITUTION_USER"),
-                None,
+        if not has_document_scope_access(
+            app.institution_id,
+            app.review_team_id,
+            active_contexts,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: the application is outside your institution or review-team scope.",
             )
-            if not inst_context or inst_context.institution_id != app.institution_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied: application belongs to another institution",
-                )
 
         return rev, app
 
