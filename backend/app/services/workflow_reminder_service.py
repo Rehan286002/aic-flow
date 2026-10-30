@@ -152,7 +152,7 @@ def _notification_values(
     placeholders = {
         "application_number": application.application_number,
         "condition_title": target_title,
-        "due_date": local_due.strftime("%d %b %Y, %I:%M %p IST"),
+        "due_date": local_due.strftime("%d %b %Y") if isinstance(local_due, date) else local_due.strftime("%d %b %Y, %I:%M %p IST"),
     }
     return {
         "recipient_user_id": recipient_id,
