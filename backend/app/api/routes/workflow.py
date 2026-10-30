@@ -15,6 +15,7 @@ from app.models.application_revision import ApplicationRevision
 from app.models.document import Document
 from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_version import DocumentVersion
+from app.models.document_validity import DocumentValidityRecord
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
 from app.models.executive_committee_decision import ExecutiveCommitteeDecision
@@ -61,9 +62,13 @@ from app.schemas.workflow import (
     WorkflowTeamAssignmentRequest,
     WorkflowReminderPolicyResponse,
     WorkflowReminderPolicyUpdateRequest,
+    DocumentValidityResponse,
+    DocumentValiditySubmitRequest,
+    DocumentValidityReviewRequest,
 )
 from app.services.application_service import get_application_detail
 from app.services.document_upload_service import document_upload_service
+from app.services.document_validity_service import submit_document_validity, review_document_validity
 from app.services.workflow_service import (
     EVENT_ROLE_ALLOWLIST,
     add_workflow_event,
@@ -183,6 +188,11 @@ def get_workflow_case(
     shc_proceeding = db.scalar(select(SHCProceeding).where(SHCProceeding.workflow_case_id == case.workflow_case_id))
     ec_decision = db.scalar(select(ExecutiveCommitteeDecision).where(ExecutiveCommitteeDecision.workflow_case_id == case.workflow_case_id))
     sac_appeal = db.scalar(select(SACAppeal).where(SACAppeal.workflow_case_id == case.workflow_case_id))
+    document_validity_records = list(db.scalars(
+        select(DocumentValidityRecord)
+        .where(DocumentValidityRecord.workflow_case_id == case.workflow_case_id)
+        .order_by(DocumentValidityRecord.created_at.desc())
+    ).all())
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
@@ -193,6 +203,7 @@ def get_workflow_case(
         shc_proceeding=SHCProceedingResponse.model_validate(shc_proceeding) if shc_proceeding else None,
         executive_committee_decision=ExecutiveCommitteeDecisionResponse.model_validate(ec_decision) if ec_decision else None,
         sac_appeal=SACAppealResponse.model_validate(sac_appeal) if sac_appeal else None,
+        document_validity_records=[DocumentValidityResponse.model_validate(item) for item in document_validity_records],
     )
 
 
@@ -1002,6 +1013,73 @@ def list_obligations(
 
     rows = db.execute(stmt.where(or_(*scope)).order_by(ComplianceObligation.due_at.asc())).all()
     return [ComplianceObligationResponse.model_validate(item) for item, _application in rows]
+
+
+@router.post("/cases/{workflow_case_id}/document-validity", response_model=DocumentValidityResponse, status_code=status.HTTP_201_CREATED)
+def submit_case_document_validity(
+    workflow_case_id: uuid.UUID,
+    payload: DocumentValiditySubmitRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentValidityResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "INSTITUTION_USER":
+        raise HTTPException(status_code=403, detail="Only the institution may submit document validity details.")
+    requirement = db.get(ApplicationRequirement, payload.application_requirement_id)
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Application requirement not found.")
+    record = submit_document_validity(
+        db,
+        case,
+        application,
+        requirement,
+        current_user.user_id,
+        document_version_id=payload.document_version_id,
+        validity_type=payload.validity_type,
+        issue_date=payload.issue_date,
+        valid_from=payload.valid_from,
+        valid_until=payload.valid_until,
+        lease_start_date=payload.lease_start_date,
+        lease_end_date=payload.lease_end_date,
+        maximum_course_duration_years=payload.maximum_course_duration_years,
+        validity_basis_reference=payload.validity_basis_reference,
+    )
+    db.commit()
+    db.refresh(record)
+    return DocumentValidityResponse.model_validate(record)
+
+
+@router.post("/document-validity/{document_validity_record_id}/review", response_model=DocumentValidityResponse)
+def review_case_document_validity(
+    document_validity_record_id: uuid.UUID,
+    payload: DocumentValidityReviewRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentValidityResponse:
+    record = db.scalar(
+        select(DocumentValidityRecord)
+        .where(DocumentValidityRecord.document_validity_record_id == document_validity_record_id)
+        .with_for_update()
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document validity record not found.")
+    case, application = _get_case(db, record.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = review_document_validity(
+        db,
+        record,
+        case,
+        current_user.user_id,
+        context.role_code,
+        action=payload.action,
+        note=payload.note,
+    )
+    db.commit()
+    db.refresh(updated)
+    return DocumentValidityResponse.model_validate(updated)
 
 
 @router.get("/reminder-policies", response_model=list[WorkflowReminderPolicyResponse])
