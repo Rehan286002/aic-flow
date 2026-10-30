@@ -818,7 +818,7 @@ export default function WorkflowHubPage() {
           {reminderPoliciesLoading ? <p className="mt-4 text-xs text-slate-500">Loading reminder policies…</p> : reminderPolicies.length === 0 ? <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">No reminder policies are configured.</p> : <div className="mt-4 space-y-3">
             {reminderPolicies.map((policy) => <div key={policy.reminder_policy_id} className="rounded-xl border border-slate-200 p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div><div className="text-sm font-semibold text-slate-900">{policy.title_template}</div><div className="mt-0.5 text-[10px] font-mono text-slate-400">{policy.policy_code} · {policy.target_type === 'OBLIGATION' ? 'Approval condition' : 'Application stage'}</div></div>
+                <div><div className="text-sm font-semibold text-slate-900">{policy.title_template}</div><div className="mt-0.5 text-[10px] font-mono text-slate-400">{policy.policy_code} · {policy.target_type === 'OBLIGATION' ? 'Approval condition' : policy.target_type === 'DOCUMENT_VALIDITY' ? 'Lease / regulatory document validity' : 'Application stage'}</div></div>
                 <label className="flex items-center gap-2 text-[11px] font-medium text-slate-600"><input type="checkbox" checked={policy.is_enabled} onChange={(event) => setReminderPolicies((items) => items.map((item) => item.reminder_policy_id === policy.reminder_policy_id ? { ...item, is_enabled: event.target.checked } : item))}/> Enabled</label>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -1280,6 +1280,10 @@ export default function WorkflowHubPage() {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div><div className="text-sm font-semibold text-slate-900">{stageLabel(record.validity_type)}</div><div className="mt-0.5 break-all font-mono text-[10px] text-slate-400">Document version {record.document_version_id.slice(0, 8)}… · Submitted {dateTimeLabel(record.submitted_at)}</div></div>
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${record.status === 'VERIFIED' ? 'bg-emerald-50 text-emerald-700' : record.status === 'RETURNED' ? 'bg-amber-50 text-amber-700' : record.status === 'SUPERSEDED' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-700'}`}>{stageLabel(record.status)}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <a href={documentsApi.getDownloadUrl(record.application_requirement_id, record.document_version_id)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900"><FileCheck className="size-3.5"/> Open exact document version</a>
+                    {record.supersedes_validity_record_id && <span className="text-[10px] text-slate-400">Supersedes an earlier verified validity record</span>}
                   </div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-3">
                     {record.validity_type === 'LEASE_DEED' ? <>
