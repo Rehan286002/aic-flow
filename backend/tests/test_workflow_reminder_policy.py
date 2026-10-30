@@ -1,5 +1,9 @@
 from datetime import UTC, date, datetime, timedelta
 
+from app.models.document_validity import DocumentValidityRecord
+from app.models.workflow_reminder import WorkflowReminderPolicy
+from app.services.workflow_reminder_service import _target_due_at, _target_is_active
+
 import pytest
 from pydantic import ValidationError
 
@@ -84,3 +88,36 @@ def test_document_validity_reminder_dates_use_midnight_india_time():
     assert trigger.tzinfo == ZoneInfo("Asia/Kolkata")
     assert trigger.date() == date(2026, 10, 2)
     assert reminder_is_due(due_date, -90, trigger)
+
+
+
+def test_only_verified_document_validity_records_are_eligible_for_expiry_reminders():
+    policy = WorkflowReminderPolicy(
+        target_type="DOCUMENT_VALIDITY",
+        recipient_group="INSTITUTION",
+    )
+    verified = DocumentValidityRecord(
+        status="VERIFIED",
+        validity_type="LEASE_DEED",
+        valid_until=date(2027, 1, 1),
+        review_due_at=date(2027, 1, 1),
+    )
+    superseded = DocumentValidityRecord(
+        status="SUPERSEDED",
+        validity_type="LEASE_DEED",
+        valid_until=date(2027, 1, 1),
+        review_due_at=date(2027, 1, 1),
+    )
+    assert _target_is_active(policy, verified)
+    assert not _target_is_active(policy, superseded)
+    assert _target_due_at(verified) == date(2027, 1, 1)
+
+
+def test_building_completion_certificate_reminders_use_structural_review_trigger():
+    record = DocumentValidityRecord(
+        status="VERIFIED",
+        validity_type="BUILDING_COMPLETION_CERTIFICATE",
+        valid_until=None,
+        review_due_at=date(2026, 7, 1),
+    )
+    assert _target_due_at(record) == date(2026, 7, 1)
