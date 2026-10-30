@@ -114,6 +114,54 @@ export interface ExecutiveCommitteeDecision {
   created_at: string;
 }
 
+export interface SACAppeal {
+  sac_appeal_id: string;
+  executive_committee_decision_id: string;
+  workflow_case_id: string;
+  application_id: string;
+  shc_proceeding_id: string | null;
+  status: 'FILED' | 'SCHEDULED' | 'HEARING_RECORDED' | 'RECOMMENDATION_RECORDED' | 'COUNCIL_DECISION_RECORDED';
+  appeal_reference: string | null;
+  appeal_grounds: string;
+  supporting_material_reference: string;
+  filed_by: string;
+  filed_at: string;
+  appeal_deadline_at: string;
+  hearing_mode: 'ONLINE' | 'IN_PERSON' | null;
+  hearing_scheduled_at: string | null;
+  hearing_details: string | null;
+  official_schedule_reference: string | null;
+  schedule_revision: number;
+  regulation_bureau_observation_reference: string | null;
+  regulation_bureau_observations: string | null;
+  bureau_observations_recorded_by: string | null;
+  bureau_observations_recorded_at: string | null;
+  representative_one_name: string | null;
+  representative_one_designation: string | null;
+  representative_one_id_reference: string | null;
+  representative_one_id_self_attested: boolean | null;
+  representative_two_name: string | null;
+  representative_two_designation: string | null;
+  representative_two_id_reference: string | null;
+  representative_two_id_self_attested: boolean | null;
+  hearing_summary: string | null;
+  hearing_recorded_by: string | null;
+  hearing_recorded_at: string | null;
+  recommendation_code: 'RECOMMEND_TO_COUNCIL' | 'NOT_RECOMMEND_TO_COUNCIL' | 'FURTHER_REVIEW_REQUIRED' | null;
+  recommendation_text: string | null;
+  recommendation_reference: string | null;
+  recommendation_recorded_by: string | null;
+  recommendation_recorded_at: string | null;
+  council_outcome_code: 'UPHOLD_EXECUTIVE_COMMITTEE' | 'SET_ASIDE_EXECUTIVE_COMMITTEE' | 'MODIFY_EXECUTIVE_COMMITTEE' | 'REMAND_FOR_RECONSIDERATION' | null;
+  council_decision_reference: string | null;
+  council_decision_text: string | null;
+  council_decision_uploaded_at: string | null;
+  council_decision_recorded_by: string | null;
+  council_decision_recorded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkflowDetail extends WorkflowCase {
   requirements: ApplicationRequirementItem[];
   events: WorkflowEvent[];
@@ -121,6 +169,7 @@ export interface WorkflowDetail extends WorkflowCase {
   evc_visit: EVCVisit | null;
   shc_proceeding: SHCProceeding | null;
   executive_committee_decision: ExecutiveCommitteeDecision | null;
+  sac_appeal: SACAppeal | null;
 }
 
 export interface WorkflowNotification {
@@ -145,6 +194,55 @@ export const workflowApi = {
     request<WorkflowDetail>(`/api/v1/workflow/cases/${id}/assign`, {
       method: 'POST', body: JSON.stringify({ review_team_id, assigned_role_code: 'INTAKE_OFFICER', note }),
     }, true),
+  fileSacAppeal: (caseId: string, payload: {
+    appeal_reference?: string | null;
+    appeal_grounds: string;
+    supporting_material_reference: string;
+  }) => request<SACAppeal>(`/api/v1/workflow/cases/${caseId}/sac-appeal`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  scheduleSacHearing: (appealId: string, payload: {
+    hearing_mode: 'ONLINE' | 'IN_PERSON';
+    hearing_scheduled_at: string;
+    hearing_details: string;
+    official_schedule_reference?: string | null;
+  }) => request<SACAppeal>(`/api/v1/workflow/sac-appeals/${appealId}/schedule`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordSacBureauObservations: (appealId: string, payload: {
+    observation_reference: string;
+    observations: string;
+  }) => request<SACAppeal>(`/api/v1/workflow/sac-appeals/${appealId}/bureau-observations`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordSacHearing: (appealId: string, payload: {
+    representative_one_name: string;
+    representative_one_designation: string;
+    representative_one_id_reference: string;
+    representative_one_id_self_attested: true;
+    representative_two_name: string;
+    representative_two_designation: string;
+    representative_two_id_reference: string;
+    representative_two_id_self_attested: true;
+    hearing_summary: string;
+  }) => request<SACAppeal>(`/api/v1/workflow/sac-appeals/${appealId}/hearing`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordSacRecommendation: (appealId: string, payload: {
+    recommendation_code: 'RECOMMEND_TO_COUNCIL' | 'NOT_RECOMMEND_TO_COUNCIL' | 'FURTHER_REVIEW_REQUIRED';
+    recommendation_text: string;
+    recommendation_reference?: string | null;
+  }) => request<SACAppeal>(`/api/v1/workflow/sac-appeals/${appealId}/recommendation`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
+  recordCouncilAppealDecision: (appealId: string, payload: {
+    outcome_code: 'UPHOLD_EXECUTIVE_COMMITTEE' | 'SET_ASIDE_EXECUTIVE_COMMITTEE' | 'MODIFY_EXECUTIVE_COMMITTEE' | 'REMAND_FOR_RECONSIDERATION';
+    decision_reference: string;
+    decision_text: string;
+    decision_uploaded_at: string;
+  }) => request<SACAppeal>(`/api/v1/workflow/sac-appeals/${appealId}/council-decision`, {
+    method: 'POST', body: JSON.stringify(payload),
+  }, true),
   recordExecutiveCommitteeDecision: (caseId: string, payload: {
     outcome_code: 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'REJECTED';
     decision_reference: string;
