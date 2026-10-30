@@ -17,6 +17,7 @@ from app.models.compliance_obligation import ComplianceObligation
 from app.models.evc_visit import EVCVisit
 from app.models.executive_committee_decision import ExecutiveCommitteeDecision
 from app.models.shc_proceeding import SHCProceeding
+from app.models.sac_appeal import SACAppeal
 from app.models.in_app_notification import InAppNotification
 from app.models.institution import Institution
 from app.models.user import User
@@ -38,6 +39,13 @@ from app.schemas.workflow import (
     SHCHearingScheduleRequest,
     SHCProceedingResponse,
     SHCRecommendationRequest,
+    SACAppealFileRequest,
+    SACAppealResponse,
+    SACHearingScheduleRequest,
+    SACBureauObservationsRequest,
+    SACHearingRecordRequest,
+    SACRecommendationRequest,
+    CouncilDecisionRequest,
     ComplianceObligationCreateRequest,
     ComplianceObligationResponse,
     NotificationResponse,
@@ -63,6 +71,12 @@ from app.services.workflow_service import (
     record_shc_recommendation,
     schedule_shc_hearing,
     submit_shc_compliance_reference,
+    file_sac_appeal,
+    schedule_sac_hearing,
+    record_sac_bureau_observations,
+    record_sac_hearing,
+    record_sac_recommendation,
+    record_council_appeal_decision,
     transition_case,
     validate_operational_event,
 )
@@ -161,6 +175,7 @@ def get_workflow_case(
     evc_visit = db.scalar(select(EVCVisit).where(EVCVisit.workflow_case_id == case.workflow_case_id))
     shc_proceeding = db.scalar(select(SHCProceeding).where(SHCProceeding.workflow_case_id == case.workflow_case_id))
     ec_decision = db.scalar(select(ExecutiveCommitteeDecision).where(ExecutiveCommitteeDecision.workflow_case_id == case.workflow_case_id))
+    sac_appeal = db.scalar(select(SACAppeal).where(SACAppeal.workflow_case_id == case.workflow_case_id))
     application_detail = get_application_detail(db, application.institution_id, application.application_id)
     return WorkflowCaseDetailResponse(
         **base.model_dump(),
@@ -170,6 +185,7 @@ def get_workflow_case(
         evc_visit=EVCVisitResponse.model_validate(evc_visit) if evc_visit else None,
         shc_proceeding=SHCProceedingResponse.model_validate(shc_proceeding) if shc_proceeding else None,
         executive_committee_decision=ExecutiveCommitteeDecisionResponse.model_validate(ec_decision) if ec_decision else None,
+        sac_appeal=SACAppealResponse.model_validate(sac_appeal) if sac_appeal else None,
     )
 
 
@@ -299,6 +315,156 @@ def record_executive_committee_decision_endpoint(
     db.commit()
     db.refresh(case)
     return get_workflow_case(workflow_case_id, current_user, db)
+
+
+@router.post("/cases/{workflow_case_id}/sac-appeal", response_model=SACAppealResponse, status_code=status.HTTP_201_CREATED)
+def file_sac_appeal_endpoint(
+    workflow_case_id: uuid.UUID,
+    payload: SACAppealFileRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    case, application = _get_case(db, workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "INSTITUTION_USER":
+        raise HTTPException(status_code=403, detail="Only the institution applicant may file an appeal against its Executive Committee decision.")
+    appeal = file_sac_appeal(
+        db,
+        case,
+        current_user.user_id,
+        appeal_reference=payload.appeal_reference,
+        appeal_grounds=payload.appeal_grounds,
+        supporting_material_reference=payload.supporting_material_reference,
+    )
+    db.commit()
+    db.refresh(appeal)
+    return SACAppealResponse.model_validate(appeal)
+
+
+@router.post("/sac-appeals/{sac_appeal_id}/schedule", response_model=SACAppealResponse)
+def schedule_sac_appeal_hearing_endpoint(
+    sac_appeal_id: uuid.UUID,
+    payload: SACHearingScheduleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    appeal = db.get(SACAppeal, sac_appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="SAC appeal record not found.")
+    case, application = _get_case(db, appeal.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = schedule_sac_hearing(
+        db, case, appeal, current_user.user_id, context.role_code,
+        hearing_mode=payload.hearing_mode,
+        hearing_scheduled_at=payload.hearing_scheduled_at,
+        hearing_details=payload.hearing_details,
+        official_schedule_reference=payload.official_schedule_reference,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SACAppealResponse.model_validate(updated)
+
+
+@router.post("/sac-appeals/{sac_appeal_id}/bureau-observations", response_model=SACAppealResponse)
+def record_sac_bureau_observations_endpoint(
+    sac_appeal_id: uuid.UUID,
+    payload: SACBureauObservationsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    appeal = db.get(SACAppeal, sac_appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="SAC appeal record not found.")
+    case, application = _get_case(db, appeal.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = record_sac_bureau_observations(
+        db, case, appeal, current_user.user_id, context.role_code,
+        observation_reference=payload.observation_reference,
+        observations=payload.observations,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SACAppealResponse.model_validate(updated)
+
+
+@router.post("/sac-appeals/{sac_appeal_id}/hearing", response_model=SACAppealResponse)
+def record_sac_hearing_endpoint(
+    sac_appeal_id: uuid.UUID,
+    payload: SACHearingRecordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    appeal = db.get(SACAppeal, sac_appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="SAC appeal record not found.")
+    case, application = _get_case(db, appeal.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = record_sac_hearing(
+        db, case, appeal, current_user.user_id, context.role_code,
+        representative_one_name=payload.representative_one_name,
+        representative_one_designation=payload.representative_one_designation,
+        representative_one_id_reference=payload.representative_one_id_reference,
+        representative_two_name=payload.representative_two_name,
+        representative_two_designation=payload.representative_two_designation,
+        representative_two_id_reference=payload.representative_two_id_reference,
+        hearing_summary=payload.hearing_summary,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SACAppealResponse.model_validate(updated)
+
+
+@router.post("/sac-appeals/{sac_appeal_id}/recommendation", response_model=SACAppealResponse)
+def record_sac_recommendation_endpoint(
+    sac_appeal_id: uuid.UUID,
+    payload: SACRecommendationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    appeal = db.get(SACAppeal, sac_appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="SAC appeal record not found.")
+    case, application = _get_case(db, appeal.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = record_sac_recommendation(
+        db, case, appeal, current_user.user_id, context.role_code,
+        recommendation_code=payload.recommendation_code,
+        recommendation_text=payload.recommendation_text,
+        recommendation_reference=payload.recommendation_reference,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SACAppealResponse.model_validate(updated)
+
+
+@router.post("/sac-appeals/{sac_appeal_id}/council-decision", response_model=SACAppealResponse)
+def record_council_appeal_decision_endpoint(
+    sac_appeal_id: uuid.UUID,
+    payload: CouncilDecisionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SACAppealResponse:
+    appeal = db.get(SACAppeal, sac_appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="SAC appeal record not found.")
+    case, application = _get_case(db, appeal.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    updated = record_council_appeal_decision(
+        db, case, appeal, current_user.user_id, context.role_code,
+        outcome_code=payload.outcome_code,
+        decision_reference=payload.decision_reference,
+        decision_text=payload.decision_text,
+        decision_uploaded_at=payload.decision_uploaded_at,
+    )
+    db.commit()
+    db.refresh(updated)
+    return SACAppealResponse.model_validate(updated)
 
 
 @router.post("/cases/{workflow_case_id}/events", response_model=WorkflowEventResponse, status_code=status.HTTP_201_CREATED)
