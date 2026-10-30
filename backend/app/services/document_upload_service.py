@@ -266,6 +266,8 @@ class DocumentUploadService:
         application_requirement_id: UUID,
         user: User,
         upload_file: UploadFile,
+        *,
+        update_requirement_status: bool = True,
     ) -> DocumentUploadResponse:
         # 1. Lock requirement row
         req = self._get_requirement_with_lock(db, application_requirement_id)
@@ -471,32 +473,30 @@ class DocumentUploadService:
 
             # 11. Update requirement status
             if scan_result.status == "CLEAN":
-                req.status = RequirementStatus.UPLOADED
+                if update_requirement_status:
+                    req.status = RequirementStatus.UPLOADED
                 message = f"Document '{val_result.original_filename}' uploaded and verified clean (v{new_version_num})."
             elif scan_result.status == "DETECTED":
-                # Check if requirement already has an active clean version
-                active_v, _ = self.get_active_clean_version(
-                    db, application_requirement_id
-                )
-                if not active_v:
-                    req.status = RequirementStatus.PENDING
-                # If active_v exists, req.status remains UPLOADED!
+                if update_requirement_status:
+                    active_v, _ = self.get_active_clean_version(db, application_requirement_id)
+                    if not active_v:
+                        req.status = RequirementStatus.PENDING
                 message = (
                     f"SECURITY ALERT: Malware detected ({scan_result.threat_name}) in "
                     f"'{val_result.original_filename}'. Version {new_version_num} rejected."
                 )
             else:  # ERROR
-                active_v, _ = self.get_active_clean_version(
-                    db, application_requirement_id
-                )
-                if not active_v:
-                    req.status = RequirementStatus.PENDING
+                if update_requirement_status:
+                    active_v, _ = self.get_active_clean_version(db, application_requirement_id)
+                    if not active_v:
+                        req.status = RequirementStatus.PENDING
                 message = (
                     f"Antivirus scanning error occurred for '{val_result.original_filename}'. "
                     f"File quarantined; please retry scan."
                 )
 
-            req.last_evaluated_at = func.now()
+            if update_requirement_status:
+                req.last_evaluated_at = func.now()
             db.commit()
 
             # Find active clean version ID after commit
