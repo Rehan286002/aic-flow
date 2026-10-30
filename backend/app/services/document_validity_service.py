@@ -15,7 +15,6 @@ from app.models.document import Document
 from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_validity import DocumentValidityRecord
 from app.models.document_version import DocumentVersion
-from app.models.checklist_item import ChecklistItem
 from app.models.workflow_case import WorkflowCase
 from app.services.workflow_service import add_workflow_event
 
