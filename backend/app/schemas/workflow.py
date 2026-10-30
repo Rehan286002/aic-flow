@@ -411,6 +411,35 @@ class ComplianceObligationActionRequest(BaseModel):
     note: str = Field(min_length=5, max_length=2000)
 
 
+class WorkflowReminderPolicyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    reminder_policy_id: uuid.UUID
+    policy_code: str
+    target_type: Literal["WORKFLOW_CASE", "OBLIGATION"]
+    days_from_due: int
+    recipient_group: Literal["INSTITUTION", "ASSIGNEE", "SUPERVISORS"]
+    severity: Literal["INFO", "WARNING", "CRITICAL"]
+    title_template: str
+    body_template: str
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowReminderPolicyUpdateRequest(BaseModel):
+    is_enabled: bool | None = None
+    days_from_due: int | None = Field(default=None, ge=-365, le=365)
+    recipient_group: Literal["INSTITUTION", "ASSIGNEE", "SUPERVISORS"] | None = None
+    severity: Literal["INFO", "WARNING", "CRITICAL"] | None = None
+
+    @model_validator(mode="after")
+    def require_a_change(self):
+        if all(getattr(self, field) is None for field in ("is_enabled", "days_from_due", "recipient_group", "severity")):
+            raise ValueError("Choose at least one reminder policy setting to update.")
+        return self
+
+
 class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
