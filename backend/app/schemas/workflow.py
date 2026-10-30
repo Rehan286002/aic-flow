@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -377,6 +377,7 @@ class WorkflowCaseDetailResponse(WorkflowCaseListResponse):
     shc_proceeding: SHCProceedingResponse | None = None
     executive_committee_decision: ExecutiveCommitteeDecisionResponse | None = None
     sac_appeal: SACAppealResponse | None = None
+    document_validity_records: list[DocumentValidityResponse] = Field(default_factory=list)
 
 
 class WorkflowTransitionRequest(BaseModel):
@@ -409,6 +410,66 @@ class ComplianceObligationActionRequest(BaseModel):
     evidence_document_version_id: uuid.UUID | None = None
     evidence_reference: str | None = Field(default=None, max_length=500)
     note: str = Field(min_length=5, max_length=2000)
+
+
+class DocumentValidityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_validity_record_id: uuid.UUID
+    workflow_case_id: uuid.UUID
+    application_id: uuid.UUID
+    application_requirement_id: uuid.UUID
+    document_id: uuid.UUID
+    document_version_id: uuid.UUID
+    supersedes_validity_record_id: uuid.UUID | None = None
+    validity_type: str
+    status: str
+    issue_date: date | None = None
+    valid_from: date | None = None
+    valid_until: date | None = None
+    review_due_at: date | None = None
+    lease_start_date: date | None = None
+    lease_end_date: date | None = None
+    maximum_course_duration_years: int | None = None
+    lease_minimum_term_met: bool | None = None
+    lease_live_term_met_at_submission: bool | None = None
+    lease_assessed_on: date | None = None
+    validity_basis_reference: str
+    submitted_by: uuid.UUID
+    submitted_at: datetime
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
+    review_note: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentValiditySubmitRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    application_requirement_id: uuid.UUID
+    document_version_id: uuid.UUID
+    validity_type: Literal[
+        "LEASE_DEED",
+        "STRUCTURAL_STABILITY_CERTIFICATE",
+        "FIRE_SAFETY_CERTIFICATE",
+        "BUILDING_COMPLETION_CERTIFICATE",
+        "ISSUER_DATED_DOCUMENT",
+    ]
+    issue_date: date | None = None
+    valid_from: date | None = None
+    valid_until: date | None = None
+    lease_start_date: date | None = None
+    lease_end_date: date | None = None
+    maximum_course_duration_years: int | None = Field(default=None, ge=1, le=20)
+    validity_basis_reference: str = Field(min_length=5, max_length=2000)
+
+
+class DocumentValidityReviewRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    action: Literal["VERIFY", "RETURN"]
+    note: str = Field(min_length=8, max_length=2000)
 
 
 class WorkflowReminderPolicyResponse(BaseModel):
