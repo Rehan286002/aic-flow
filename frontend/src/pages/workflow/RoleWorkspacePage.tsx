@@ -421,7 +421,6 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
         setValidityIssuer('');
         setValidFrom('');
         setValidUntil('');
-        setDocumentReference('');
       }
       await refresh();
       if (selected) setSelected(await workflowApi.detail(selected.workflow_case_id));
