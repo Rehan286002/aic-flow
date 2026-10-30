@@ -1,6 +1,7 @@
 import calendar
 import uuid
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -18,6 +19,8 @@ from app.models.document_version import DocumentVersion
 from app.models.workflow_case import WorkflowCase
 from app.services.workflow_service import add_workflow_event
 
+
+INDIA_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 VALIDITY_TYPES = {
     "LEASE_DEED",
@@ -127,7 +130,7 @@ def calculate_document_validity(
         if application_submitted_at is not None:
             if application_submitted_at.tzinfo is None or application_submitted_at.utcoffset() is None:
                 raise HTTPException(status_code=422, detail="Application submission timestamp must include a timezone.")
-            assessed_on = application_submitted_at.astimezone(UTC).date()
+            assessed_on = application_submitted_at.astimezone(INDIA_TIMEZONE).date()
             result["lease_assessed_on"] = assessed_on
             course_duration_anniversary = add_calendar_years(assessed_on, maximum_course_duration_years)
             result["lease_live_term_met_at_submission"] = lease_end_date >= course_duration_anniversary
@@ -140,6 +143,10 @@ def calculate_document_validity(
             raise HTTPException(status_code=422, detail="Validity end date cannot precede the issue date.")
         result["valid_from"] = valid_from or issue_date
         result["review_due_at"] = valid_until
+
+    effective_from = result["valid_from"]
+    if result["valid_until"] is not None and effective_from is not None and result["valid_until"] < effective_from:
+        raise HTTPException(status_code=422, detail="Validity end date cannot precede the effective-from date.")
 
     return result
 
@@ -222,8 +229,12 @@ def submit_document_validity(
         raise HTTPException(status_code=409, detail="The selected document requirement is no longer available.")
     item_code = checklist_item.item_code
     expected_type = checklist_item.expected_document_type_code
-    if validity_type in {"LEASE_DEED", "BUILDING_COMPLETION_CERTIFICATE"} and item_code != "EOA-SD-03":
-        raise HTTPException(status_code=422, detail="Land, lease and Completion Certificate validity must be linked to the Land / Building document requirement.")
+    if (
+        validity_type in {"LEASE_DEED", "BUILDING_COMPLETION_CERTIFICATE"}
+        and item_code != "EOA-SD-03"
+        and expected_type not in {"BUILDING_DOCUMENT", "LAND_LEASE_DEED", "LEASE_DEED"}
+    ):
+        raise HTTPException(status_code=422, detail="Land, lease and Completion Certificate validity must be linked to an applicable land / building / lease document requirement.")
     if validity_type == "STRUCTURAL_STABILITY_CERTIFICATE" and item_code != "EOA-SD-04" and expected_type != "STRUCTURAL_STABILITY_CERTIFICATE":
         raise HTTPException(status_code=422, detail="Structural Stability Certificate validity must be linked to its dedicated requirement.")
     if validity_type == "FIRE_SAFETY_CERTIFICATE" and item_code != "EOA-SD-05" and expected_type != "FIRE_SAFETY_CERTIFICATE":
