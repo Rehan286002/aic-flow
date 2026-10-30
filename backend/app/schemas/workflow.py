@@ -15,6 +15,8 @@ class WorkflowCaseListResponse(BaseModel):
     application_number: str
     institution_id: uuid.UUID
     institution_name: str
+    review_team_id: uuid.UUID | None = None
+    review_team_name: str | None = None
     academic_year: str
     process_type: str
     route_code: str

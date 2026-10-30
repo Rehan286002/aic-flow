@@ -10,6 +10,7 @@ def test_demo_scenarios_have_a_complete_stage_path():
         assert path[-1] == scenario["stage"]
         assert len(path) == len(set(path))
         assert set(path).issubset(seed_demo_data.STAGE_RECEIVING_ASSIGNMENT)
+        assert scenario["team_key"] in seed_demo_data.DEMO_TEAM_GROUPS
 
 
 def test_demo_routes_are_explicitly_simulated_not_published_policy():
@@ -39,3 +40,12 @@ def test_demo_seed_refuses_non_loopback_database(monkeypatch):
     )
     with pytest.raises(SystemExit):
         seed_demo_data.require_local_environment()
+
+
+
+def test_demo_review_groups_are_synthetic_and_all_scenarios_are_distributed():
+    assert set(seed_demo_data.DEMO_TEAM_GROUPS) == {"north", "south", "east"}
+    scenario_groups = {scenario["team_key"] for scenario in seed_demo_data.SCENARIOS}
+    assert scenario_groups == {"north", "south", "east"}
+    for _key, (_name, description) in seed_demo_data.DEMO_TEAM_GROUPS.items():
+        assert "not an AICTE regional office" in description

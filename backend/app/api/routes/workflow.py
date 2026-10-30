@@ -70,12 +70,15 @@ def _require_case_access(db: Session, application: Application, user: User) -> A
 
 def _to_list_item(db: Session, case: WorkflowCase, application: Application) -> WorkflowCaseListResponse:
     institution = db.get(Institution, application.institution_id)
+    review_team = db.get(ReviewTeam, application.review_team_id) if application.review_team_id else None
     return WorkflowCaseListResponse(
         workflow_case_id=case.workflow_case_id,
         application_id=application.application_id,
         application_number=application.application_number,
         institution_id=application.institution_id,
         institution_name=institution.institution_name if institution else "Institution record unavailable",
+        review_team_id=application.review_team_id,
+        review_team_name=review_team.team_name if review_team else None,
         academic_year=application.academic_year,
         process_type=case.process_type,
         route_code=case.route_code,

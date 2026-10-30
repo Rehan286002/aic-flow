@@ -85,7 +85,7 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
   materials: { title: 'Case materials', description: 'Review the selected case dossier and the evidence already linked to its application.' },
   observations: { title: 'Observations and reports', description: 'Record proceeding notes and minutes as append-only case events.' },
   completion: { title: 'Proceeding completion', description: 'Complete the proceeding record only after its configured requirements are present.' },
-  regions: { title: 'Regional comparison', description: 'Compare only the records visible inside this account’s authorised team or regional scope.' },
+  regions: { title: 'Region and review-team comparison', description: 'Compare case ageing, EVC work, overdue items and obligations across authorised review-team scopes. Official region grouping requires an approved region master.' },
   workload: { title: 'Officer workload', description: 'Review pending stages and their current assigned role or officer.' },
   escalations: { title: 'Overdue and escalation dossiers', description: 'Review overdue triggers and record a supervisory acknowledgement or resolution.' },
   decisions: { title: 'Competent authority decision queue', description: 'Present cases awaiting an authorised decision; the platform never determines the outcome.' },

@@ -51,8 +51,9 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Vercel hosts the static frontend
 ## Local PS 26262 demonstration data
 
 A separate synthetic walkthrough is available for local development. It creates
-one fictional institution, a local review team, role-specific demo accounts,
-applications at different workflow stages, stage-history events, EVC and
+one fictional institution, three clearly named synthetic review-team groups,
+role-specific demo accounts, applications distributed across those groups at
+different workflow stages, stage-history events, EVC and
 proceeding examples, post-decision obligations, notifications, and lease
 validity metadata.
 
@@ -70,13 +71,19 @@ uv run python scripts/seed_checklist.py
 uv run python scripts/seed_demo_data.py
 ```
 
+The three review-team groups let Regional and Bureau users compare workload
+without pretending that the names are official AICTE Regions. Operational demo
+accounts receive delegated membership in all three synthetic groups; actual
+production team membership remains assignment-scoped.
+
 The seed prompts for one local demo password, shared by newly created demo
 accounts. Existing demo accounts are never reset or reactivated. Alternatively,
 set AIC_FLOW_DEMO_PASSWORD in your local shell before running the seed. Use a
 unique password and never reuse a production credential.
 
-The script prints the account emails and reports how many cases, obligations,
-document-validity records and synthetic deadline/escalation alerts were created.
+The script prints the account emails and synthetic review-team groups, and
+reports how many cases, obligations, document-validity records and synthetic
+deadline/escalation alerts were created.
 Sign in with a different role account to inspect each workspace and follow a
 synthetic application through institution submission, processing, EVC,
 proceedings, authority review, and compliance tracking.

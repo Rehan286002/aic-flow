@@ -7,6 +7,8 @@ export interface WorkflowCase {
   application_number: string;
   institution_id: string;
   institution_name: string;
+  review_team_id?: string | null;
+  review_team_name?: string | null;
   academic_year: string;
   process_type: string;
   route_code: string;

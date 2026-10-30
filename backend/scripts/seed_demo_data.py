@@ -59,8 +59,11 @@ from app.services.checklist_service import (
 from app.services.workflow_service import add_workflow_event, create_workflow_case
 
 DEMO_INSTITUTION_CODE = "DEMO-AICTE-LOCAL-0001"
-DEMO_TEAM_NAME = "AIC-Flow Local Demonstration Team"
-DEMO_TEAM_CODE = "AIC-FLOW-DEMO-TEAM-2026"
+DEMO_TEAM_GROUPS = {
+    "north": ("AIC-Flow Demo Review Group North", "Synthetic north group for regional comparison; not an AICTE regional office."),
+    "south": ("AIC-Flow Demo Review Group South", "Synthetic south group for regional comparison; not an AICTE regional office."),
+    "east": ("AIC-Flow Demo Review Group East", "Synthetic east group for regional comparison; not an AICTE regional office."),
+}
 DEMO_ACADEMIC_YEAR = "2026-27"
 
 ROLE_ACCOUNTS = [
@@ -80,47 +83,47 @@ ROLE_ACCOUNTS = [
 SCENARIOS = [
     {
         "suffix": "0001", "process_type": "EOA_SELF_DISCLOSURE", "stage": "DRAFT",
-        "assigned_role": None, "owner": None, "scrutiny": False, "evc": False, "committee": False,
+        "team_key": "north",\n        "assigned_role": None, "owner": None, "scrutiny": False, "evc": False, "committee": False,
         "due_days": 8, "summary": "Draft application awaiting institution submission.",
     },
     {
         "suffix": "0002", "process_type": "DEMO_INTAKE_QUEUE", "stage": "SUBMITTED",
-        "assigned_role": "INTAKE_OFFICER", "owner": "intake", "scrutiny": True, "evc": True, "committee": False,
+        "team_key": "north",\n        "assigned_role": "INTAKE_OFFICER", "owner": "intake", "scrutiny": True, "evc": True, "committee": False,
         "due_days": 2, "summary": "Newly submitted application awaiting registry receipt checks.",
     },
     {
         "suffix": "0003", "process_type": "DEMO_CLARIFICATION", "stage": "CLARIFICATION_REQUESTED",
-        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": True, "evc": False, "committee": False,
+        "team_key": "south",\n        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": True, "evc": False, "committee": False,
         "due_days": 5, "summary": "Institution response requested for a synthetic document discrepancy.",
     },
     {
         "suffix": "0004", "process_type": "DEMO_SCRUTINY_EVC", "stage": "SCRUTINY",
-        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": True, "evc": True, "committee": False,
+        "team_key": "south",\n        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": True, "evc": True, "committee": False,
         "due_days": -1, "summary": "Scrutiny case with an overdue internal demo service target.",
     },
     {
         "suffix": "0005", "process_type": "DEMO_EVC_COORDINATION", "stage": "EVC_COORDINATION",
-        "assigned_role": "EVC_COORDINATOR", "owner": "evc_coordinator", "scrutiny": True, "evc": True, "committee": False,
+        "team_key": "east",\n        "assigned_role": "EVC_COORDINATOR", "owner": "evc_coordinator", "scrutiny": True, "evc": True, "committee": False,
         "due_days": -2, "summary": "EVC coordination task awaiting an administrative schedule.",
     },
     {
         "suffix": "0006", "process_type": "DEMO_EVC_SCHEDULED", "stage": "EVC_SCHEDULED",
-        "assigned_role": "EVC_MEMBER", "owner": "evc_member", "scrutiny": True, "evc": True, "committee": False,
+        "team_key": "east",\n        "assigned_role": "EVC_MEMBER", "owner": "evc_member", "scrutiny": True, "evc": True, "committee": False,
         "due_days": 4, "summary": "Scheduled synthetic EVC visit awaiting the participant report.",
     },
     {
         "suffix": "0007", "process_type": "DEMO_SHC_PROCEEDING", "stage": "COMMITTEE_PROCEEDINGS",
-        "assigned_role": "COMMITTEE_SECRETARIAT", "owner": "committee", "scrutiny": True, "evc": True, "committee": True,
+        "team_key": "north",\n        "assigned_role": "COMMITTEE_SECRETARIAT", "owner": "committee", "scrutiny": True, "evc": True, "committee": True,
         "due_days": 6, "summary": "Synthetic SHC proceeding with a recorded recommendation workflow.",
     },
     {
         "suffix": "0008", "process_type": "DEMO_AUTHORITY_DOCKET", "stage": "AWAITING_AUTHORITY",
-        "assigned_role": "COMPETENT_AUTHORITY", "owner": "authority", "scrutiny": True, "evc": False, "committee": False,
+        "team_key": "south",\n        "assigned_role": "COMPETENT_AUTHORITY", "owner": "authority", "scrutiny": True, "evc": False, "committee": False,
         "due_days": 1, "summary": "Consolidated case dossier awaiting human authority review.",
     },
     {
         "suffix": "0009", "process_type": "DEMO_COMPLIANCE_TRACKING", "stage": "OBLIGATION_TRACKING",
-        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": False, "evc": False, "committee": False,
+        "team_key": "east",\n        "assigned_role": "SCRUTINY_OFFICER", "owner": "scrutiny", "scrutiny": False, "evc": False, "committee": False,
         "due_days": 20, "summary": "Approved-with-conditions demo case with open undertakings and evidence verification.",
     },
 ]
@@ -247,17 +250,20 @@ def seed_identity(db, password: str):
         db.add(institution)
         db.flush()
 
-    team = db.scalar(select(ReviewTeam).where(ReviewTeam.team_name == DEMO_TEAM_NAME))
-    if team is None:
-        team = ReviewTeam(
-            team_name=DEMO_TEAM_NAME,
-            description="Synthetic local demonstration team. Not an AICTE regional office.",
-            is_active=True,
-        )
-        db.add(team)
-        db.flush()
-    elif not team.is_active:
-        raise RuntimeError("The synthetic demo team exists but is inactive.")
+    teams = {}
+    for group_key, (team_name, description) in DEMO_TEAM_GROUPS.items():
+        team = db.scalar(select(ReviewTeam).where(ReviewTeam.team_name == team_name))
+        if team is None:
+            team = ReviewTeam(
+                team_name=team_name,
+                description=description,
+                is_active=True,
+            )
+            db.add(team)
+            db.flush()
+        elif not team.is_active:
+            raise RuntimeError(f"Synthetic demo team {team_name} exists but is inactive.")
+        teams[group_key] = team
 
     people = {}
     for key, email, name, role_code in ROLE_ACCOUNTS:
@@ -269,11 +275,14 @@ def seed_identity(db, password: str):
         elif role_code in {RoleCode.ADMIN, RoleCode.REGULATORY_POLICY_PUBLISHER}:
             ensure_role_assignment(db, user, role_code)
         else:
-            ensure_team_membership(db, team.review_team_id, user.user_id, role_code)
-            ensure_role_assignment(db, user, role_code, team_id=team.review_team_id)
+            # Each operational demo account is deliberately delegated all three
+            # synthetic review groups so the regional/Bureau comparison is populated.
+            for team in teams.values():
+                ensure_team_membership(db, team.review_team_id, user.user_id, role_code)
+                ensure_role_assignment(db, user, role_code, team_id=team.review_team_id)
 
     db.flush()
-    return institution, team, people
+    return institution, teams, people
 
 
 def stage_status(stage: str) -> ApplicationStatus:
@@ -464,13 +473,17 @@ def seed_stage_history(db, application, case, people, path: list[str]) -> None:
         previous_stage = stage
 
 
-def seed_application_case(db, institution, team, people, spec: dict):
+def seed_application_case(db, institution, teams, people, spec: dict):
+    team = teams[spec["team_key"]]
     application_number = "DEMO-26262-" + spec["suffix"]
     application = db.scalar(select(Application).where(Application.application_number == application_number))
     if application is not None:
         case = db.scalar(select(WorkflowCase).where(WorkflowCase.application_id == application.application_id))
         if case is None:
             raise RuntimeError(f"Demo application {application_number} exists without its workflow case.")
+        # Safe only for our fixed synthetic DEMO-26262 references: migrate the old
+        # single-team local fixture into the three labelled synthetic review groups.
+        application.review_team_id = team.review_team_id
         return application, case, False
 
     user = people["institution"]
@@ -934,12 +947,12 @@ def main() -> int:
     db = SessionLocal()
     try:
         seed_standard_references(db)
-        institution, team, people = seed_identity(db, password)
+        institution, teams, people = seed_identity(db, password)
         created_cases = 0
         existing_cases = 0
         applications_by_suffix = {}
         for spec in SCENARIOS:
-            application, case, created = seed_application_case(db, institution, team, people, spec)
+            application, case, created = seed_application_case(db, institution, teams, people, spec)
             applications_by_suffix[spec["suffix"]] = (application, case)
             created_cases += int(created)
             existing_cases += int(not created)
@@ -959,7 +972,9 @@ def main() -> int:
         print(f"Created document-validity metadata records: {validity_created}")
         print(f"Created synthetic deadline and escalation alerts: {alerts_created}")
         print(f"Institution: {institution.institution_name} ({DEMO_INSTITUTION_CODE})")
-        print(f"Operational team: {team.team_name}")
+        print("Synthetic review-team groups (not AICTE regional offices):")
+        for group_key, team in teams.items():
+            print(f"  {group_key:8} {team.team_name}")
         print("\nLocal demo accounts (same password entered at the prompt for newly created accounts):")
         for key, email, _name, _role in ROLE_ACCOUNTS:
             print(f"  {key:16} {email}")
