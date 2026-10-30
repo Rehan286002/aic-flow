@@ -27,6 +27,8 @@ const ROLE_GUIDANCE: Record<string, { title: string; description: string }> = {
   EVC_COORDINATOR: { title: 'EVC coordination', description: 'Coordinate visit logistics, record the schedule and ensure the visit report is recorded against the case.' },
   EVC_MEMBER: { title: 'EVC assigned participant', description: 'Record the visit outcome and supporting report for the assigned case.' },
   COMMITTEE_SECRETARIAT: { title: 'Standing Hearing Committee secretariat', description: 'Maintain the SHC hearing schedule, institution appearance record and recommendation for Executive Committee consideration.' },
+  SAC_SECRETARIAT: { title: 'Standing Appellate Committee secretariat', description: 'Coordinate appeal hearings, record institution appearances and present the SAC recommendation to the Council.' },
+  COUNCIL_SECRETARIAT: { title: 'Council secretariat', description: 'Record the Council decision following consideration of the Standing Appellate Committee recommendation.' },
   BUREAU_SUPERVISOR: { title: 'Bureau supervision', description: 'Oversee case pendency, review escalations and verify closure of post-decision obligations.' },
   LEAD_AUDITOR: { title: 'Senior regulatory oversight', description: 'Review escalated cases, supervise processing and monitor compliance resolution.' },
   COMPETENT_AUTHORITY: { title: 'Competent authority', description: 'Review the completed case record and record the authorised statutory outcome and any binding conditions.' },
@@ -86,6 +88,31 @@ export default function WorkflowHubPage() {
   const [ecDecisionReasons, setEcDecisionReasons] = useState('');
   const [ecSpeakingOrderReference, setEcSpeakingOrderReference] = useState('');
   const [ecSpeakingOrderUploadedAt, setEcSpeakingOrderUploadedAt] = useState('');
+  const [sacAppealReference, setSacAppealReference] = useState('');
+  const [sacAppealGrounds, setSacAppealGrounds] = useState('');
+  const [sacSupportingMaterialReference, setSacSupportingMaterialReference] = useState('');
+  const [sacHearingMode, setSacHearingMode] = useState<'ONLINE' | 'IN_PERSON'>('ONLINE');
+  const [sacHearingAt, setSacHearingAt] = useState('');
+  const [sacHearingDetails, setSacHearingDetails] = useState('');
+  const [sacOfficialScheduleReference, setSacOfficialScheduleReference] = useState('');
+  const [sacBureauObservationReference, setSacBureauObservationReference] = useState('');
+  const [sacBureauObservations, setSacBureauObservations] = useState('');
+  const [sacRepOneName, setSacRepOneName] = useState('');
+  const [sacRepOneDesignation, setSacRepOneDesignation] = useState('');
+  const [sacRepOneIdReference, setSacRepOneIdReference] = useState('');
+  const [sacRepOneIdSelfAttested, setSacRepOneIdSelfAttested] = useState(false);
+  const [sacRepTwoName, setSacRepTwoName] = useState('');
+  const [sacRepTwoDesignation, setSacRepTwoDesignation] = useState('');
+  const [sacRepTwoIdReference, setSacRepTwoIdReference] = useState('');
+  const [sacRepTwoIdSelfAttested, setSacRepTwoIdSelfAttested] = useState(false);
+  const [sacHearingSummary, setSacHearingSummary] = useState('');
+  const [sacRecommendationCode, setSacRecommendationCode] = useState<'RECOMMEND_TO_COUNCIL' | 'NOT_RECOMMEND_TO_COUNCIL' | 'FURTHER_REVIEW_REQUIRED'>('FURTHER_REVIEW_REQUIRED');
+  const [sacRecommendationText, setSacRecommendationText] = useState('');
+  const [sacRecommendationReference, setSacRecommendationReference] = useState('');
+  const [councilOutcome, setCouncilOutcome] = useState<'UPHOLD_EXECUTIVE_COMMITTEE' | 'SET_ASIDE_EXECUTIVE_COMMITTEE' | 'MODIFY_EXECUTIVE_COMMITTEE' | 'REMAND_FOR_RECONSIDERATION'>('UPHOLD_EXECUTIVE_COMMITTEE');
+  const [councilDecisionReference, setCouncilDecisionReference] = useState('');
+  const [councilDecisionText, setCouncilDecisionText] = useState('');
+  const [councilDecisionUploadedAt, setCouncilDecisionUploadedAt] = useState('');
   const [uploadRequirement, setUploadRequirement] = useState<ApplicationRequirementItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -412,6 +439,165 @@ export default function WorkflowHubPage() {
       toast.success('Executive Committee decision recorded with its Speaking Order reference.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not record the Executive Committee decision.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fileSacAppeal = async () => {
+    if (!selected || sacAppealGrounds.trim().length < 20 || sacSupportingMaterialReference.trim().length < 5) {
+      toast.error('Enter the grounds of appeal and the supporting material reference.');
+      return;
+    }
+    const deadline = selected.executive_committee_decision?.appeal_deadline_at;
+    if (!deadline || Date.now() > new Date(deadline).getTime()) {
+      toast.error('The appeal filing period shown on this decision has ended.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.fileSacAppeal(selected.workflow_case_id, {
+        appeal_reference: sacAppealReference.trim() || null,
+        appeal_grounds: sacAppealGrounds.trim(),
+        supporting_material_reference: sacSupportingMaterialReference.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      setSacAppealGrounds('');
+      setSacSupportingMaterialReference('');
+      await refresh();
+      toast.success('Appeal filed and linked to the Executive Committee decision.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not file the appeal.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scheduleSacHearing = async () => {
+    if (!selected?.sac_appeal || !sacHearingAt || sacHearingDetails.trim().length < 5) {
+      toast.error('Enter the SAC hearing date and time and hearing details.');
+      return;
+    }
+    const scheduledAt = new Date(sacHearingAt);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+      toast.error('The SAC hearing must be scheduled for a future date and time.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.scheduleSacHearing(selected.sac_appeal.sac_appeal_id, {
+        hearing_mode: sacHearingMode,
+        hearing_scheduled_at: scheduledAt.toISOString(),
+        hearing_details: sacHearingDetails.trim(),
+        official_schedule_reference: sacOfficialScheduleReference.trim() || null,
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('SAC hearing schedule recorded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not schedule the SAC hearing.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordSacBureauObservations = async () => {
+    if (!selected?.sac_appeal || sacBureauObservationReference.trim().length < 2 || sacBureauObservations.trim().length < 15) {
+      toast.error('Enter the Regulation Bureau observation reference and observations.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordSacBureauObservations(selected.sac_appeal.sac_appeal_id, {
+        observation_reference: sacBureauObservationReference.trim(),
+        observations: sacBureauObservations.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('Regulation Bureau observations recorded for SAC.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record Regulation Bureau observations.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordSacHearing = async () => {
+    if (!selected?.sac_appeal ||
+        sacRepOneName.trim().length < 2 || sacRepOneDesignation.trim().length < 2 || sacRepOneIdReference.trim().length < 3 ||
+        sacRepTwoName.trim().length < 2 || sacRepTwoDesignation.trim().length < 2 || sacRepTwoIdReference.trim().length < 3 ||
+        !sacRepOneIdSelfAttested || !sacRepTwoIdSelfAttested || sacHearingSummary.trim().length < 20) {
+      toast.error('Complete both representatives, self-attested ID proof references and hearing summary.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordSacHearing(selected.sac_appeal.sac_appeal_id, {
+        representative_one_name: sacRepOneName.trim(),
+        representative_one_designation: sacRepOneDesignation.trim(),
+        representative_one_id_reference: sacRepOneIdReference.trim(),
+        representative_one_id_self_attested: true,
+        representative_two_name: sacRepTwoName.trim(),
+        representative_two_designation: sacRepTwoDesignation.trim(),
+        representative_two_id_reference: sacRepTwoIdReference.trim(),
+        representative_two_id_self_attested: true,
+        hearing_summary: sacHearingSummary.trim(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('SAC hearing record saved.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the SAC hearing.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordSacRecommendation = async () => {
+    if (!selected?.sac_appeal || sacRecommendationText.trim().length < 15) {
+      toast.error('Enter the SAC recommendation and its reasons.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordSacRecommendation(selected.sac_appeal.sac_appeal_id, {
+        recommendation_code: sacRecommendationCode,
+        recommendation_text: sacRecommendationText.trim(),
+        recommendation_reference: sacRecommendationReference.trim() || null,
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('SAC recommendation recorded for Council consideration.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the SAC recommendation.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recordCouncilAppealDecision = async () => {
+    if (!selected?.sac_appeal || councilDecisionReference.trim().length < 2 || councilDecisionText.trim().length < 15 || !councilDecisionUploadedAt) {
+      toast.error('Complete the Council decision reference, reasons and upload date/time.');
+      return;
+    }
+    const uploadedAt = new Date(councilDecisionUploadedAt);
+    if (Number.isNaN(uploadedAt.getTime()) || uploadedAt > new Date()) {
+      toast.error('Enter a valid Council decision upload date and time.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await workflowApi.recordCouncilAppealDecision(selected.sac_appeal.sac_appeal_id, {
+        outcome_code: councilOutcome,
+        decision_reference: councilDecisionReference.trim(),
+        decision_text: councilDecisionText.trim(),
+        decision_uploaded_at: uploadedAt.toISOString(),
+      });
+      setSelected(await workflowApi.detail(selected.workflow_case_id));
+      await refresh();
+      toast.success('Council appeal decision recorded.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the Council appeal decision.');
     } finally {
       setBusy(false);
     }
