@@ -1,5 +1,6 @@
 import { request } from '@/lib/api';
 import type { ApplicationRequirementItem } from '@/types/application';
+import type { DocumentUploadResponse } from '@/types/document';
 
 export interface WorkflowCase {
   workflow_case_id: string;
@@ -39,6 +40,8 @@ export interface ComplianceObligation {
   due_at: string;
   status: string;
   evidence_document_id: string | null;
+  evidence_document_version_id: string | null;
+  evidence_requirement_id: string | null;
   evidence_reference: string | null;
   verification_note: string | null;
 }
@@ -314,10 +317,22 @@ export const workflowApi = {
     request<ComplianceObligation>(`/api/v1/workflow/cases/${id}/obligations`, {
       method: 'POST', body: JSON.stringify(payload),
     }, true),
-  obligationAction: (id: string, action: string, note: string, evidence_reference?: string) =>
+  obligationAction: (id: string, action: string, note: string, evidence_reference?: string, evidence_document_version_id?: string) =>
     request<ComplianceObligation>(`/api/v1/workflow/obligations/${id}`, {
-      method: 'PATCH', body: JSON.stringify({ action, note, evidence_reference }),
+      method: 'PATCH', body: JSON.stringify({ action, note, evidence_reference, evidence_document_version_id }),
     }, true),
+  uploadObligationEvidence: async (obligationId: string, requirementId: string, file: File, note: string): Promise<DocumentUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('note', note);
+    return request<DocumentUploadResponse>(
+      `/api/v1/workflow/obligations/${encodeURIComponent(obligationId)}/evidence/${encodeURIComponent(requirementId)}`,
+      { method: 'POST', body: formData },
+      true,
+    );
+  },
+  getObligationEvidenceDownloadUrl: (obligationId: string) =>
+    `/api/v1/workflow/obligations/${encodeURIComponent(obligationId)}/evidence/download`,
   notifications: () => request<WorkflowNotification[]>('/api/v1/workflow/notifications'),
   markRead: (id: string) => request<WorkflowNotification>(`/api/v1/workflow/notifications/${id}/read`, { method: 'PATCH' }, true),
 };
