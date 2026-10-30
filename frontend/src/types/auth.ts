@@ -39,11 +39,13 @@ export function roleCodeToWorkspace(roleCode: string): Role | null {
     case 'EVC_COORDINATOR':
     case 'EVC_MEMBER':
     case 'COMMITTEE_SECRETARIAT':
+    case 'SAC_SECRETARIAT':
       return 'auditor';
     case 'LEAD_AUDITOR':
     case 'REGIONAL_OFFICER':
     case 'BUREAU_SUPERVISOR':
     case 'COMPETENT_AUTHORITY':
+    case 'COUNCIL_SECRETARIAT':
       return 'lead';
     case 'ADMIN':
     case 'REGULATORY_POLICY_PUBLISHER':
@@ -87,6 +89,10 @@ export function formatRoleContextLabel(rc: RoleContext): string {
       return 'EVC Assigned Participant';
     case 'COMMITTEE_SECRETARIAT':
       return 'Standing Hearing Committee Secretariat';
+    case 'SAC_SECRETARIAT':
+      return 'Standing Appellate Committee Secretariat';
+    case 'COUNCIL_SECRETARIAT':
+      return 'Council Secretariat';
     case 'BUREAU_SUPERVISOR':
       return 'Bureau Supervisor';
     case 'COMPETENT_AUTHORITY':
