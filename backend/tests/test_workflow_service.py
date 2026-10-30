@@ -3,7 +3,13 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.services.workflow_service import case_access_context, route_profile_for, validate_operational_event, validate_transition
+from app.services.workflow_service import (
+    case_access_context,
+    institution_notification_projection,
+    route_profile_for,
+    validate_operational_event,
+    validate_transition,
+)
 
 
 def case(stage: str, route: dict):
@@ -144,3 +150,80 @@ def test_evc_coordinator_can_open_evc_completed_route_without_committee():
     assert case_access_context(
         None, app, [context], case=workflow_case, user_id="evc-coordinator-1"
     ) is context
+
+
+
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        "OFFICER_NOTE",
+        "EVC_REPORT_RECORDED",
+        "COMMITTEE_CONVENED",
+        "COMMITTEE_MINUTES_RECORDED",
+        "DECISION_RECORDED",
+        "ESCALATION_ACKNOWLEDGED",
+        "ESCALATION_RESOLVED",
+        "DEMO_ESCALATION_CREATED",
+    ],
+)
+def test_internal_workflow_events_are_not_projected_to_institution(event_type):
+    event = SimpleNamespace(
+        event_type=event_type,
+        event_payload={"internal_note": "Confidential officer or committee details"},
+        summary="Confidential internal summary",
+        to_stage=None,
+    )
+    assert institution_notification_projection(event) is None
+
+
+def test_clarification_notification_requires_explicit_institution_visibility():
+    private_event = SimpleNamespace(
+        event_type="CLARIFICATION_REQUESTED",
+        event_payload={"institution_visible": False},
+        summary="Internal-only scrutiny observation",
+        to_stage=None,
+    )
+    assert institution_notification_projection(private_event) is None
+
+    public_event = SimpleNamespace(
+        event_type="CLARIFICATION_REQUESTED",
+        event_payload={"institution_visible": True},
+        summary="Please upload the revised certificate.",
+        to_stage=None,
+    )
+    title, body, severity = institution_notification_projection(public_event)
+    assert title == "Clarification response required"
+    assert body == "Please upload the revised certificate."
+    assert severity == "WARNING"
+
+
+def test_stage_transition_uses_a_safe_status_message_not_internal_reason():
+    event = SimpleNamespace(
+        event_type="STAGE_TRANSITION",
+        event_payload={},
+        summary="Internal officer note: evidence concern and escalation context.",
+        to_stage="CLARIFICATION_REQUESTED",
+    )
+    title, body, severity = institution_notification_projection(event)
+    assert title == "Clarification response required"
+    assert "Internal officer note" not in body
+    assert "Open Clarifications" in body
+    assert severity == "WARNING"
+
+
+def test_institution_notification_for_evc_contains_only_visit_date():
+    event = SimpleNamespace(
+        event_type="EVC_VISIT_SCHEDULED",
+        event_payload={
+            "visit_date": "2026-11-15",
+            "location": "Restricted internal location notes",
+        },
+        summary="Internal schedule summary with confidential details.",
+        to_stage=None,
+    )
+    title, body, severity = institution_notification_projection(event)
+    assert title == "EVC visit scheduled"
+    assert "2026-11-15" in body
+    assert "Restricted internal location notes" not in body
+    assert "confidential" not in body.lower()
+    assert severity == "INFO"

@@ -201,23 +201,108 @@ def add_workflow_event(
     return event
 
 
+def institution_notification_projection(event: Any) -> tuple[str, str, str] | None:
+    """Return only an institution-safe notification projection for an internal event.
+
+    Internal officer notes, EVC reports, committee minutes, decisions and
+    escalation details are never copied verbatim to an institution inbox.
+    """
+    event_type = event.event_type
+    payload = event.event_payload or {}
+
+    if event_type == "STAGE_TRANSITION":
+        stage = (event.to_stage or "").replace("_", " ").lower()
+        if event.to_stage == "CLARIFICATION_REQUESTED":
+            return (
+                "Clarification response required",
+                "Your application was returned for clarification. Open Clarifications to review the requested items.",
+                "WARNING",
+            )
+        if event.to_stage == "APPROVED_WITH_CONDITIONS":
+            body = "The application stage is now approved with conditions. Open the application and review the formal order and listed obligations."
+        elif event.to_stage == "APPROVED":
+            body = "The application stage is now approved. Open the application and review the formal communication."
+        elif event.to_stage == "REJECTED":
+            body = "A decision status has been recorded. Open the application and review the formal communication."
+        elif event.to_stage == "RESUBMITTED":
+            body = "Your clarification response has been submitted and the application is moving for further review."
+        else:
+            body = f"Your application stage was updated to {stage}. Sign in to review its current status."
+        return ("Application status updated", body, "INFO")
+
+    if event_type == "CLARIFICATION_REQUESTED" and payload.get("institution_visible") is True:
+        return ("Clarification response required", event.summary[:2000], "WARNING")
+
+    if event_type == "EVC_VISIT_SCHEDULED":
+        visit_date = payload.get("visit_date")
+        date_text = f" for {visit_date}" if isinstance(visit_date, str) and visit_date else ""
+        return (
+            "EVC visit scheduled",
+            "An EVC visit has been scheduled" + date_text + ". Sign in to review the visit instructions.",
+            "INFO",
+        )
+
+    if event_type == "DOCUMENT_VALIDITY_RECORDED":
+        return (
+            "Document validity submitted",
+            "Your document validity details have been submitted and are awaiting officer verification.",
+            "INFO",
+        )
+
+    if event_type == "DOCUMENT_RENEWAL_SUBMITTED":
+        return (
+            "Document renewal submitted",
+            "Your replacement document has been submitted and is awaiting officer verification.",
+            "INFO",
+        )
+
+    if event_type == "DOCUMENT_VALIDITY_CONFIRMED":
+        action = payload.get("action")
+        if action == "VERIFY":
+            body = "Your submitted document validity record has been verified by an authorised officer."
+            severity = "INFO"
+        else:
+            body = "Your submitted document validity record requires correction. Open Documents and Renewals for the next action."
+            severity = "WARNING"
+        return ("Document validity review updated", body, severity)
+
+    if event_type == "DEMO_COMPLIANCE_ALERT":
+        return (
+            "Compliance deadline reminder",
+            "An undertaking or compliance evidence item linked to your institution is due or overdue. Review the Obligations page.",
+            "WARNING",
+        )
+
+    if event_type == "DEMO_DOCUMENT_EXPIRY_ALERT":
+        return (
+            "Document validity reminder",
+            "A document validity date is approaching or has passed in this local demonstration. Review Documents and Renewals.",
+            "WARNING",
+        )
+
+    # All other event types are internal unless an explicit safe projection is
+    # added here. In particular, do not forward OFFICER_NOTE, EVC reports,
+    # committee proceedings/minutes, decisions or supervisory escalations.
+    return None
+
+
 def notify_case_participants(
     db: Session,
     case: WorkflowCase,
     event: WorkflowEvent,
     message: str,
 ) -> None:
-    """Notify the institution and only the receiving role, assignee and supervisors.
+    """Notify authorised operational recipients and separately project safe messages to institutions.
 
-    A team is not a broadcast list: operational recipients are resolved from the
-    case's current receiving role and assignment. Historical or unassigned cases
-    do not fan out to every officer in the review team.
+    A review team is not a broadcast list. Institution-facing messages use an
+    explicit safe projection; the full summary is reserved for assigned officers
+    and designated supervisors within the current review-team scope.
     """
     application = db.get(Application, case.application_id)
     if application is None:
         return
 
-    recipients: set[uuid.UUID] = set(
+    institution_users = set(
         db.scalars(
             select(InstitutionMembership.user_id).where(
                 InstitutionMembership.institution_id == application.institution_id,
@@ -226,22 +311,22 @@ def notify_case_participants(
         ).all()
     )
 
+    operational_recipients: set[uuid.UUID] = set()
     supervisor_roles = ["BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"]
     if application.review_team_id:
         target_roles = list(supervisor_roles)
         if case.assigned_role_code and not case.assigned_user_id:
             target_roles.append(case.assigned_role_code)
-
         team_members = select(ReviewTeamMember.user_id).where(
             ReviewTeamMember.review_team_id == application.review_team_id,
             ReviewTeamMember.is_active.is_(True),
             ReviewTeamMember.team_role.in_(target_roles),
         )
-        recipients.update(db.scalars(team_members).all())
+        operational_recipients.update(db.scalars(team_members).all())
 
     if case.assigned_user_id:
-        recipients.add(case.assigned_user_id)
-    recipients.add(event.actor_user_id)
+        operational_recipients.add(case.assigned_user_id)
+    operational_recipients.add(event.actor_user_id)
 
     notification_titles = {
         "CLARIFICATION_REQUESTED": "Clarification response required",
@@ -263,7 +348,24 @@ def notify_case_participants(
         "DEMO_DOCUMENT_EXPIRY_ALERT",
         "DEMO_ESCALATION_CREATED",
     }
-    for recipient in recipients:
+
+    institution_projection = institution_notification_projection(event)
+    if institution_projection is not None:
+        title, body, severity = institution_projection
+        for recipient in institution_users:
+            db.add(
+                InAppNotification(
+                    recipient_user_id=recipient,
+                    application_id=application.application_id,
+                    workflow_event_id=event.workflow_event_id,
+                    event_key=f"workflow-event:{event.workflow_event_id}",
+                    title=title,
+                    body=body[:2000],
+                    severity=severity,
+                )
+            )
+
+    for recipient in operational_recipients - institution_users:
         db.add(
             InAppNotification(
                 recipient_user_id=recipient,
