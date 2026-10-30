@@ -55,7 +55,7 @@ uv run celery -A app.core.celery_app:celery_app worker --loglevel=INFO
 uv run celery -A app.core.celery_app:celery_app beat --loglevel=INFO
 ```
 
-Reminders are delivered through the in-app notification centre. The configured policies cover application-stage due dates and post-approval condition due dates.
+Reminders are delivered through the in-app notification centre. The configured policies cover application-stage due dates, post-approval condition due dates, lease expiry, certificate expiry and the thirty-year Structural Stability Certificate review trigger. Only officer-verified document-validity records are eligible for expiry reminders; returned or superseded records are excluded.
 
 ## Database and documents
 
