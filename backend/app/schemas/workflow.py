@@ -56,6 +56,8 @@ class ComplianceObligationResponse(BaseModel):
     due_at: datetime
     status: str
     evidence_document_id: uuid.UUID | None = None
+    evidence_document_version_id: uuid.UUID | None = None
+    evidence_requirement_id: uuid.UUID | None = None
     evidence_reference: str | None = None
     verification_note: str | None = None
     created_by: uuid.UUID
@@ -404,6 +406,7 @@ class ComplianceObligationCreateRequest(BaseModel):
 class ComplianceObligationActionRequest(BaseModel):
     action: Literal["EVIDENCE_SUBMITTED", "START_VERIFICATION", "VERIFY", "RETURN", "CLOSE"]
     evidence_document_id: uuid.UUID | None = None
+    evidence_document_version_id: uuid.UUID | None = None
     evidence_reference: str | None = Field(default=None, max_length=500)
     note: str = Field(min_length=5, max_length=2000)
 
