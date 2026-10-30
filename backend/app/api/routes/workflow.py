@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, false, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_role_assignments, get_current_user, get_db, verify_csrf
@@ -131,10 +131,25 @@ def list_workflow_cases(
                 )
             else:
                 stage_role_scope = WorkflowCase.assigned_role_code == context.role_code
+            handoff_scope = false()
+            if context.role_code == "COMMITTEE_SECRETARIAT":
+                handoff_scope = and_(
+                    WorkflowCase.current_stage == "EVC_COMPLETED",
+                    WorkflowCase.route_snapshot["requires_committee"].astext == "true",
+                )
+            elif context.role_code == "EVC_COORDINATOR":
+                handoff_scope = and_(
+                    WorkflowCase.current_stage == "EVC_COMPLETED",
+                    WorkflowCase.route_snapshot["requires_committee"].astext == "false",
+                )
             team_scope = and_(
                 team_scope,
                 stage_role_scope,
-                or_(WorkflowCase.assigned_user_id.is_(None), WorkflowCase.assigned_user_id == current_user.user_id),
+                or_(
+                    WorkflowCase.assigned_user_id.is_(None),
+                    WorkflowCase.assigned_user_id == current_user.user_id,
+                    handoff_scope,
+                ),
             )
         scope_clauses.append(team_scope)
     if can_view_unassigned_intake:

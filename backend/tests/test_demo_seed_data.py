@@ -9,6 +9,7 @@ def test_demo_scenarios_have_a_complete_stage_path():
         assert path[0] == "DRAFT"
         assert path[-1] == scenario["stage"]
         assert len(path) == len(set(path))
+        assert set(path).issubset(seed_demo_data.STAGE_RECEIVING_ASSIGNMENT)
 
 
 def test_demo_routes_are_explicitly_simulated_not_published_policy():

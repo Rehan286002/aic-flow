@@ -390,7 +390,12 @@ def case_access_context(
     case: WorkflowCase | None = None,
     user_id: uuid.UUID | None = None,
 ) -> Any:
-    """Resolve resource access from tenant/team scope, stage role and individual assignment."""
+    """Resolve resource access from institution/team scope, stage role and assignment.
+
+    EVC completion is an explicit hand-off boundary: the next route-authorised
+    coordinator or committee secretariat can open the case even though the
+    completed EVC activity was individually assigned to an EVC participant.
+    """
     supervisors = {"BUREAU_SUPERVISOR", "REGIONAL_OFFICER", "LEAD_AUDITOR"}
     for context in role_contexts:
         if context.role_code == "INSTITUTION_USER" and context.institution_id == application.institution_id:
@@ -401,25 +406,33 @@ def case_access_context(
         if not (in_team_scope or unassigned_intake):
             continue
 
+        handoff_access = False
         if case is not None and context.role_code not in supervisors:
             assigned_role = case.assigned_role_code
             role_match = assigned_role == context.role_code
             if context.role_code == "AUDITOR":
                 role_match = assigned_role in {"INTAKE_OFFICER", "SCRUTINY_OFFICER"}
             elif context.role_code == "COMMITTEE_SECRETARIAT":
-                role_match = role_match or (
+                handoff_access = (
                     case.current_stage == "EVC_COMPLETED"
                     and (case.route_snapshot or {}).get("requires_committee") is True
                 )
+                role_match = role_match or handoff_access
             elif context.role_code == "EVC_COORDINATOR":
-                role_match = role_match or (
+                handoff_access = (
                     case.current_stage == "EVC_COMPLETED"
                     and (case.route_snapshot or {}).get("requires_committee") is False
                 )
+                role_match = role_match or handoff_access
             if not role_match:
                 continue
 
-            if case.assigned_user_id and user_id and case.assigned_user_id != user_id:
+            if (
+                case.assigned_user_id
+                and user_id
+                and case.assigned_user_id != user_id
+                and not handoff_access
+            ):
                 continue
         return context
 

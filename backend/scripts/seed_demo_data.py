@@ -329,14 +329,16 @@ def stage_path_for(spec: dict) -> list[str]:
     path = ["DRAFT", "SUBMITTED", "INTAKE_REVIEW"]
     if spec["scrutiny"]:
         path.append("SCRUTINY")
-    if spec["evc"]:
-        path.extend(["EVC_COORDINATION"])
-        if spec["stage"] in {"EVC_SCHEDULED", "COMMITTEE_PROCEEDINGS"}:
+    if spec["evc"] and spec["stage"] in {
+        "EVC_COORDINATION", "EVC_SCHEDULED", "EVC_COMPLETED", "COMMITTEE_PROCEEDINGS"
+    }:
+        path.append("EVC_COORDINATION")
+        if spec["stage"] in {"EVC_SCHEDULED", "EVC_COMPLETED", "COMMITTEE_PROCEEDINGS"}:
             path.append("EVC_SCHEDULED")
-        if spec["stage"] == "COMMITTEE_PROCEEDINGS":
-            path.extend(["EVC_COMPLETED", "COMMITTEE_PROCEEDINGS"])
-        elif spec["stage"] == "EVC_COMPLETED":
+        if spec["stage"] in {"EVC_COMPLETED", "COMMITTEE_PROCEEDINGS"}:
             path.append("EVC_COMPLETED")
+        if spec["stage"] == "COMMITTEE_PROCEEDINGS":
+            path.append("COMMITTEE_PROCEEDINGS")
     if spec["stage"] == "AWAITING_AUTHORITY":
         path.append("AWAITING_AUTHORITY")
     elif spec["stage"] == "OBLIGATION_TRACKING":
@@ -381,12 +383,49 @@ def stage_actor_key(to_stage: str) -> str:
     return "institution"
 
 
+def stage_transition_actor_key(from_stage: str, to_stage: str) -> str:
+    if to_stage == "AWAITING_AUTHORITY":
+        return {
+            "INTAKE_REVIEW": "intake",
+            "SCRUTINY": "scrutiny",
+            "EVC_COMPLETED": "evc_coordinator",
+            "COMMITTEE_PROCEEDINGS": "committee",
+        }.get(from_stage, "authority")
+    return stage_actor_key(to_stage)
+
+
+STAGE_RECEIVING_ASSIGNMENT = {
+    "DRAFT": (None, None),
+    "SUBMITTED": ("INTAKE_OFFICER", "intake"),
+    "INTAKE_REVIEW": ("SCRUTINY_OFFICER", "scrutiny"),
+    "SCRUTINY": ("SCRUTINY_OFFICER", "scrutiny"),
+    "CLARIFICATION_REQUESTED": ("SCRUTINY_OFFICER", "scrutiny"),
+    "EVC_COORDINATION": ("EVC_COORDINATOR", "evc_coordinator"),
+    "EVC_SCHEDULED": ("EVC_MEMBER", "evc_member"),
+    "EVC_COMPLETED": ("EVC_MEMBER", "evc_member"),
+    "COMMITTEE_PROCEEDINGS": ("COMMITTEE_SECRETARIAT", "committee"),
+    "AWAITING_AUTHORITY": ("COMPETENT_AUTHORITY", "authority"),
+    "APPROVED_WITH_CONDITIONS": ("COMPETENT_AUTHORITY", "authority"),
+    "OBLIGATION_TRACKING": ("SCRUTINY_OFFICER", "scrutiny"),
+}
+
+
 def seed_stage_history(db, application, case, people, path: list[str]) -> None:
     previous_status = None
     previous_stage = None
     for stage in path:
         current_status = STAGE_STATUS[stage]
-        actor = people[stage_actor_key(stage)]
+        actor_key = (
+            stage_actor_key(stage)
+            if previous_stage is None
+            else stage_transition_actor_key(previous_stage, stage)
+        )
+        actor = people[actor_key]
+        receiving_role, receiving_user_key = STAGE_RECEIVING_ASSIGNMENT[stage]
+        case.assigned_role_code = receiving_role
+        case.assigned_user_id = (
+            people[receiving_user_key].user_id if receiving_user_key else None
+        )
         if current_status != previous_status:
             db.add(ApplicationStatusHistory(
                 application_id=application.application_id,
@@ -418,7 +457,7 @@ def seed_stage_history(db, application, case, people, path: list[str]) -> None:
                 event_payload={
                     "demo_only": True,
                     "simulation_code": "PS26262_ROLE_WORKFLOW_WALKTHROUGH",
-                    "actor_role": stage_actor_key(stage).upper(),
+                    "actor_role": actor_key.upper(),
                     "historical_seed_event": True,
                 },
             )

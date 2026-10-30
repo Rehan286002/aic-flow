@@ -107,3 +107,40 @@ def test_supervisor_can_view_individually_assigned_case_within_team_scope():
     workflow_case = SimpleNamespace(assigned_user_id="officer-1")
     context = SimpleNamespace(role_code="BUREAU_SUPERVISOR", review_team_id="team-1", institution_id=None)
     assert case_access_context(None, app, [context], case=workflow_case, user_id="supervisor-1") is context
+
+
+
+def test_committee_secretariat_can_open_evc_completed_route_handoff():
+    app = SimpleNamespace(institution_id="institution-1", review_team_id="team-1")
+    workflow_case = SimpleNamespace(
+        assigned_user_id="evc-member-1",
+        assigned_role_code="EVC_MEMBER",
+        current_stage="EVC_COMPLETED",
+        route_snapshot={"requires_committee": True},
+    )
+    context = SimpleNamespace(
+        role_code="COMMITTEE_SECRETARIAT",
+        review_team_id="team-1",
+        institution_id=None,
+    )
+    assert case_access_context(
+        None, app, [context], case=workflow_case, user_id="committee-officer-1"
+    ) is context
+
+
+def test_evc_coordinator_can_open_evc_completed_route_without_committee():
+    app = SimpleNamespace(institution_id="institution-1", review_team_id="team-1")
+    workflow_case = SimpleNamespace(
+        assigned_user_id="evc-member-1",
+        assigned_role_code="EVC_MEMBER",
+        current_stage="EVC_COMPLETED",
+        route_snapshot={"requires_committee": False},
+    )
+    context = SimpleNamespace(
+        role_code="EVC_COORDINATOR",
+        review_team_id="team-1",
+        institution_id=None,
+    )
+    assert case_access_context(
+        None, app, [context], case=workflow_case, user_id="evc-coordinator-1"
+    ) is context

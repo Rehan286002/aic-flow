@@ -855,6 +855,7 @@ function ObligationRow({ item, role, note, setNote, onAction, onUploadEvidence }
         <span>Due: {date(item.due_at)}</span>
         <span>Source: {item.source_condition}</span>
       </div>
+      {item.evidence_reference && <p className="mt-2 text-xs text-indigo-700 break-all">Evidence submission: {item.evidence_reference}</p>}
       {item.verification_note && <p className="mt-2 text-xs text-slate-500">Last review note: {item.verification_note}</p>}
       {(institutionCanSubmit || verifierCanReview || verifierCanVerify || supervisorCanClose) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
