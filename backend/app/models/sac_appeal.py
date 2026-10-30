@@ -90,7 +90,6 @@ class SACAppeal(Base):
     official_schedule_reference: Mapped[str | None] = mapped_column(String(180), nullable=True)
     schedule_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
-    shc_report_reference: Mapped[str | None] = mapped_column(String(180), nullable=True)
     regulation_bureau_observation_reference: Mapped[str | None] = mapped_column(String(180), nullable=True)
     regulation_bureau_observations: Mapped[str | None] = mapped_column(Text, nullable=True)
     bureau_observations_recorded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
