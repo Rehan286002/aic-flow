@@ -15,6 +15,7 @@ from app.models.document import Document
 from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_validity import DocumentValidityRecord
 from app.models.document_version import DocumentVersion
+from app.models.checklist_item import ChecklistItem
 from app.models.workflow_case import WorkflowCase
 from app.services.workflow_service import add_workflow_event
 
@@ -71,6 +72,7 @@ def calculate_document_validity(
         "maximum_course_duration_years": maximum_course_duration_years,
         "lease_minimum_term_met": None,
         "lease_live_term_met_at_submission": None,
+        "lease_eoa_cutoff_year_triggered": None,
         "lease_assessed_on": None,
     }
 
@@ -128,9 +130,9 @@ def calculate_document_validity(
                 raise HTTPException(status_code=422, detail="Application submission timestamp must include a timezone.")
             assessed_on = application_submitted_at.astimezone(UTC).date()
             result["lease_assessed_on"] = assessed_on
-            result["lease_live_term_met_at_submission"] = (
-                lease_end_date >= add_calendar_years(assessed_on, maximum_course_duration_years)
-            )
+            course_duration_anniversary = add_calendar_years(assessed_on, maximum_course_duration_years)
+            result["lease_live_term_met_at_submission"] = lease_end_date >= course_duration_anniversary
+            result["lease_eoa_cutoff_year_triggered"] = lease_end_date == course_duration_anniversary
 
     else:  # ISSUER_DATED_DOCUMENT
         if issue_date is None or valid_until is None:
@@ -216,6 +218,17 @@ def submit_document_validity(
     document_version, document = _latest_clean_document_version(
         db, application, requirement, document_version_id
     )
+    checklist_item = db.get(ChecklistItem, requirement.checklist_item_id)
+    if checklist_item is None:
+        raise HTTPException(status_code=409, detail="The selected document requirement is no longer available.")
+    item_code = checklist_item.item_code
+    expected_type = checklist_item.expected_document_type_code
+    if validity_type in {"LEASE_DEED", "BUILDING_COMPLETION_CERTIFICATE"} and item_code != "EOA-SD-03":
+        raise HTTPException(status_code=422, detail="Land, lease and Completion Certificate validity must be linked to the Land / Building document requirement.")
+    if validity_type == "STRUCTURAL_STABILITY_CERTIFICATE" and item_code != "EOA-SD-04" and expected_type != "STRUCTURAL_STABILITY_CERTIFICATE":
+        raise HTTPException(status_code=422, detail="Structural Stability Certificate validity must be linked to its dedicated requirement.")
+    if validity_type == "FIRE_SAFETY_CERTIFICATE" and item_code != "EOA-SD-05" and expected_type != "FIRE_SAFETY_CERTIFICATE":
+        raise HTTPException(status_code=422, detail="Fire Safety Certificate validity must be linked to its dedicated requirement.")
     calculated = calculate_document_validity(
         validity_type=validity_type,
         issue_date=issue_date,
@@ -285,6 +298,7 @@ def submit_document_validity(
             "review_due_at": calculated["review_due_at"].isoformat() if calculated["review_due_at"] else None,
             "lease_minimum_term_met": calculated["lease_minimum_term_met"],
             "lease_live_term_met_at_submission": calculated["lease_live_term_met_at_submission"],
+            "lease_eoa_cutoff_year_triggered": calculated["lease_eoa_cutoff_year_triggered"],
             "validity_basis_reference": validity_basis_reference.strip(),
         },
     )
