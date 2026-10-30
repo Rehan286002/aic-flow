@@ -55,7 +55,6 @@ def upgrade() -> None:
         sa.Column("hearing_details", sa.Text(), nullable=True),
         sa.Column("official_schedule_reference", sa.String(180), nullable=True),
         sa.Column("schedule_revision", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("shc_report_reference", sa.String(180), nullable=True),
         sa.Column("regulation_bureau_observation_reference", sa.String(180), nullable=True),
         sa.Column("regulation_bureau_observations", sa.Text(), nullable=True),
         sa.Column("bureau_observations_recorded_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=True),
