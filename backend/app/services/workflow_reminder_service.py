@@ -144,7 +144,7 @@ def _notification_values(
         "application_id": application.application_id,
         "workflow_event_id": None,
         "event_key": f"deadline-reminder:{policy.policy_code}:{target_type}:{target_id}",
-        "title": render_reminder_template(policy.title_template, placeholders),
+        "title": render_reminder_template(policy.title_template, placeholders)[:180],
         "body": render_reminder_template(policy.body_template, placeholders),
         "severity": policy.severity,
     }
