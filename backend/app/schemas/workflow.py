@@ -302,7 +302,7 @@ class NotificationResponse(BaseModel):
 class WorkflowTeamAssignmentRequest(BaseModel):
     review_team_id: uuid.UUID
     assigned_role_code: Literal[
-        "INTAKE_OFFICER", "SCRUTINY_OFFICER", "EVC_COORDINATOR", "COMMITTEE_SECRETARIAT", "BUREAU_SUPERVISOR"
+        "INTAKE_OFFICER", "SCRUTINY_OFFICER", "EVC_COORDINATOR", "COMMITTEE_SECRETARIAT", "SAC_SECRETARIAT", "COUNCIL_SECRETARIAT", "BUREAU_SUPERVISOR"
     ] = "INTAKE_OFFICER"
     assigned_user_id: uuid.UUID | None = None
     note: str = Field(min_length=8, max_length=1000)
