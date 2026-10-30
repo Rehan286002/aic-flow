@@ -89,7 +89,12 @@ def test_committee_events_require_confirmed_applicability_and_proceedings_stage(
 
 def test_individually_assigned_case_is_not_visible_to_other_officers():
     app = SimpleNamespace(institution_id="institution-1", review_team_id="team-1")
-    workflow_case = SimpleNamespace(assigned_user_id="officer-1")
+    workflow_case = SimpleNamespace(
+        assigned_user_id="officer-1",
+        assigned_role_code="SCRUTINY_OFFICER",
+        current_stage="SCRUTINY",
+        route_snapshot={"requires_committee": False},
+    )
     contexts = [SimpleNamespace(role_code="SCRUTINY_OFFICER", review_team_id="team-1", institution_id=None)]
     with pytest.raises(HTTPException) as exc:
         case_access_context(None, app, contexts, case=workflow_case, user_id="officer-2")
