@@ -38,7 +38,7 @@ export function UserMenu() {
   };
 
   const handleViewSessionInfo = () => {
-    const rolesSummary = auth.roles.map(formatRoleContextLabel).join(' | ');
+    const rolesSummary = auth.roles.map((context) => formatRoleContextLabel(context)).join(' | ');
     toast.info('Your account access', {
       description: `User: ${auth.user?.full_name || 'N/A'} • Available roles: ${rolesSummary || 'Standard'}`,
     });
