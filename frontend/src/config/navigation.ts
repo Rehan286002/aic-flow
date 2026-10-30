@@ -101,7 +101,7 @@ export function getRoleNavigation(workspace: Role, roleCode?: string): NavItem[]
     return items.filter((entry) => ['/office', '/office/intake', '/office/queue', '/office/dossiers', '/office/reports'].includes(entry.path));
   }
   if (workspace === 'auditor' && roleCode === 'SCRUTINY_OFFICER') {
-    return items.filter((entry) => entry.path !== '/office/intake');
+    return items.filter((entry) => !['/office/intake', '/auditor/dashboard'].includes(entry.path));
   }
   if (workspace === 'regional' && roleCode === 'EVC_COORDINATOR') {
     return items.filter((entry) => ['/regional', '/regional/evc', '/regional/calendar', '/regional/overdue', '/regional/reports'].includes(entry.path));
@@ -113,7 +113,7 @@ export function getRoleNavigation(workspace: Role, roleCode?: string): NavItem[]
     return items.filter((entry) => ['/bureau', '/bureau/decisions', '/bureau/analytics'].includes(entry.path));
   }
   if (workspace === 'lead' && roleCode === 'BUREAU_SUPERVISOR') {
-    return items.filter((entry) => entry.path !== '/bureau/decisions');
+    return items.filter((entry) => !['/bureau/decisions', '/lead/overview', '/lead/audit-history'].includes(entry.path));
   }
   if (workspace === 'lead' && roleCode === 'LEAD_AUDITOR') {
     return items.filter((entry) => entry.path !== '/bureau/decisions');

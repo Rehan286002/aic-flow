@@ -71,6 +71,10 @@ jobs:
           uv run python scripts/seed_rules.py
           uv run python scripts/seed_sources.py
 
+      - name: Validate Local Demo Seed Syntax
+        working-directory: ./backend
+        run: uv run python -m py_compile scripts/seed_demo_data.py
+
       - name: Run Backend Pytest Suite
         working-directory: ./backend
         run: uv run pytest tests/ -v

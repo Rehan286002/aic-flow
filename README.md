@@ -46,3 +46,45 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Vercel hosts the static frontend
 - No official AICTE or third-party live integration should be claimed unless credentials, authority, contracts and end-to-end tests exist.
 - Institution and review-team access is enforced by the backend. Platform administrators do not automatically gain confidential case access.
 - Extracted fields and document-integrity signals are review evidence, not proof of issuer authenticity.
+
+
+## Local PS 26262 demonstration data
+
+A separate synthetic walkthrough is available for local development. It creates
+one fictional institution, a local review team, role-specific demo accounts,
+applications at different workflow stages, stage-history events, EVC and
+proceeding examples, post-decision obligations, notifications, and lease
+validity metadata.
+
+The seed is restricted to APP_ENV=local or APP_ENV=development, a loopback
+PostgreSQL host, and the local database named aic_flow. It refuses the CI
+database and remote hosts. It does not publish regulatory policy, create
+official AICTE records, or create statutory decisions. Every seeded route is
+tagged SIMULATION_ONLY.
+
+After the local database and migrations are ready:
+
+```powershell
+cd backend
+uv run python scripts/seed_checklist.py
+uv run python scripts/seed_demo_data.py
+```
+
+The seed prompts for one local demo password, shared by newly created demo
+accounts. Existing demo accounts are never reset or reactivated. Alternatively,
+set AIC_FLOW_DEMO_PASSWORD in your local shell before running the seed. Use a
+unique password and never reuse a production credential.
+
+The script prints the account emails and reports how many cases, obligations,
+and document-validity metadata records were created. Sign in with a different
+role account to inspect each workspace and follow a synthetic application
+through institution submission, processing, EVC, proceedings, authority review,
+and compliance tracking.
+
+**Document validity demonstration boundary:** pre-seeded lease examples are
+metadata-only records with non-downloadable placeholder storage keys. They
+exercise expiry, renewal and officer-verification screens. Uploadable
+application evidence uses the existing private document pipeline, malware
+scanning, versioning and extraction process. The baseline EoA checklist does
+not expose a separate standalone lease upload slot, so the demo does not
+pretend that a placeholder is an uploaded or verified lease.

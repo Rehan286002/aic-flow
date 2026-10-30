@@ -364,10 +364,21 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
     try {
       const detail = await workflowApi.detail(item.workflow_case_id);
       setSelected(detail);
-      const requirement = chooseUploadRequirement(detail, 'LEASE_DOCUMENT')
-        || detail.requirements.find((entry) => entry.applicability_status === 'APPLICABLE' && entry.status !== 'SATISFIED');
+      const conditionText = (item.title + ' ' + item.description).toLowerCase();
+      const expectedDocumentType = conditionText.includes('fire')
+        ? 'FIRE_SAFETY_CERTIFICATE'
+        : conditionText.includes('affidavit') || conditionText.includes('undertaking')
+          ? 'AFFIDAVIT_UNDERTAKING'
+          : conditionText.includes('building') || conditionText.includes('occupancy')
+            ? 'BUILDING_DOCUMENT'
+            : null;
+      if (!expectedDocumentType) {
+        toast.error('This condition does not map to a configured document requirement. Open the Document Centre and request an authorised document slot; no unrelated checklist item will be used.');
+        return;
+      }
+      const requirement = chooseUploadRequirement(detail, expectedDocumentType);
       if (!requirement) {
-        toast.error('No applicable evidence upload slot exists on this application.');
+        toast.error('The matching document requirement is not applicable or is not present on this application revision.');
         return;
       }
       setPendingObligationId(item.obligation_id);

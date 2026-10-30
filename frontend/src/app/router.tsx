@@ -86,7 +86,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'activity',
-            element: <LeadAuditHistoryPage />,
+            element: <RoleWorkspacePage workspace="institution" section="history" />,
           },
           {
             path: 'reports',
