@@ -77,8 +77,47 @@ services:
       clamav:
         condition: service_started
 
+  workflow-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aic-flow-workflow-worker
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    environment:
+      APP_NAME: AIC-Flow API
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  workflow-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aic-flow-workflow-beat
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/var/lib/aic-flow/beat-schedule"]
+    environment:
+      APP_NAME: AIC-Flow API
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+    volumes:
+      - celery_beat_data:/var/lib/aic-flow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pg_data:
   redis_data:
   clamav_db:
   document_storage:
+  celery_beat_data:

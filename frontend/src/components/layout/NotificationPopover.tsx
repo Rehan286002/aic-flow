@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { workflowApi, type WorkflowNotification } from '@/features/workflow/api'
 import { toast } from 'sonner';
 
 export function NotificationPopover() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<WorkflowNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
@@ -29,6 +31,14 @@ export function NotificationPopover() {
       const updated = await workflowApi.markRead(id);
       setNotifications((prev) => prev.map((n) => n.notification_id === id ? updated : n));
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not update notification.'); }
+  };
+
+  const openNotification = async (item: WorkflowNotification) => {
+    if (!item.read_at) await markRead(item.notification_id);
+    setOpen(false);
+    navigate(item.application_id
+      ? `/workflow?application=${encodeURIComponent(item.application_id)}`
+      : '/workflow');
   };
 
   const markAllRead = async () => {
@@ -57,7 +67,7 @@ export function NotificationPopover() {
           <button type="button" onClick={() => setActiveTab('unread')} className={`px-2.5 py-1 rounded-md font-medium ${activeTab === 'unread' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'}`}>Unread ({unreadCount})</button>
         </div>
         <ScrollArea className="max-h-[340px]">
-          {filtered.length === 0 ? <div className="p-8 text-center text-xs text-muted-foreground"><CheckCircle2 className="size-8 text-emerald-500 mx-auto mb-2 opacity-80"/><p className="font-medium text-slate-700">{loading ? 'Loading notifications…' : 'No notifications'}</p><p className="mt-1 text-slate-500">Case events and operational updates appear here.</p></div> : <div className="divide-y divide-slate-100">{filtered.map((n) => <button type="button" key={n.notification_id} onClick={() => !n.read_at && void markRead(n.notification_id)} className={`flex w-full items-start gap-3 p-3 text-left text-xs transition-colors hover:bg-slate-50 ${!n.read_at ? 'bg-indigo-50/30' : ''}`}><div className="mt-0.5 shrink-0">{n.severity === 'WARNING' ? <AlertCircle className="size-4 text-amber-600"/> : <Info className="size-4 text-indigo-600"/>}</div><div className="flex-1 space-y-0.5"><span className="font-semibold text-slate-900">{n.title}</span><p className="text-slate-600 text-[11px] leading-relaxed">{n.body}</p><span className="text-[10px] text-slate-400">{new Date(n.created_at).toLocaleString()}</span></div>{!n.read_at && <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-indigo-600"/>}</button>)}</div>}
+          {filtered.length === 0 ? <div className="p-8 text-center text-xs text-muted-foreground"><CheckCircle2 className="size-8 text-emerald-500 mx-auto mb-2 opacity-80"/><p className="font-medium text-slate-700">{loading ? 'Loading notifications…' : 'No notifications'}</p><p className="mt-1 text-slate-500">Case events and operational updates appear here.</p></div> : <div className="divide-y divide-slate-100">{filtered.map((n) => <button type="button" key={n.notification_id} onClick={() => void openNotification(n)} className={`flex w-full items-start gap-3 p-3 text-left text-xs transition-colors hover:bg-slate-50 ${!n.read_at ? 'bg-indigo-50/30' : ''}`}><div className="mt-0.5 shrink-0">{n.severity === 'WARNING' ? <AlertCircle className="size-4 text-amber-600"/> : <Info className="size-4 text-indigo-600"/>}</div><div className="flex-1 space-y-0.5"><span className="font-semibold text-slate-900">{n.title}</span><p className="text-slate-600 text-[11px] leading-relaxed">{n.body}</p><span className="text-[10px] text-slate-400">{new Date(n.created_at).toLocaleString()}</span></div>{!n.read_at && <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-indigo-600"/>}</button>)}</div>}
         </ScrollArea>
         <div className="border-t border-slate-100 bg-slate-50 px-3 py-2 text-[10px] text-center text-slate-500">AIC-Flow · Persistent case notifications</div>
       </PopoverContent>

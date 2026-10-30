@@ -5,7 +5,7 @@
 - Product: **AIC-Flow — AICTE Approval Workflow and Compliance Platform**.
 - SIH 2026 problem statement: **PS 26262 — Integrated AICTE Approval Workflow Automation, Compliance Monitoring and Alert Management System**.
 - Only repository permitted for source changes: `Rehan286002/aic-flow`. Do not modify, push to, or create changes in any other repository.
-- The earlier AIC-Verify validation subsystem is retained as an evidence-intelligence capability. Its validation runs and legacy records are not approval workflow cases and must not be reinterpreted or rewritten.
+- Existing document extraction, evidence validation and verification records are retained as a separate supporting capability. Those records are not approval workflow cases and must not be reinterpreted or rewritten.
 
 ## 2. Product lifecycle
 

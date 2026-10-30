@@ -179,7 +179,7 @@ export default function InstitutionOverviewPage() {
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Apex Institute of Technology, Pune • Permanent Institute Code: 1-10948201
+            Your authorised institution • Academic Year 2026–27
           </p>
         </div>
 
@@ -246,7 +246,7 @@ export default function InstitutionOverviewPage() {
                 No Active AY 2026–27 Extension of Approval Application
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Apex Institute of Technology does not currently have an active self-disclosure
+                Your institution does not currently have an active self-disclosure
                 filing. Initiate an Extension of Approval application draft to establish the
                 seven statutory Annexure 2.1 evidence requirements and review preliminary
                 applicability determinations.
@@ -511,7 +511,7 @@ export default function InstitutionOverviewPage() {
                   </DialogTitle>
                 </div>
                 <DialogDescription className="text-xs text-slate-500">
-                  Application: {application?.application_number} • Apex Institute of Technology
+                  Application: {application?.application_number}
                 </DialogDescription>
               </div>
             </div>
@@ -625,51 +625,8 @@ export default function InstitutionOverviewPage() {
                 className="bg-white text-xs border-slate-300 font-mono"
               />
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Evaluated against prototype reference date <code>2026-07-01</code> (evaluation baseline, not a statutory filing deadline). If &gt;30 years elapsed
-                &rarr; Applicable. If &le;30 years &rarr; Not Applicable. If empty &rarr; Pending
-                Determination.
+                For AY 2026–27, the building-age check uses the 1 July 2026 assessment reference date. A Structural Stability Certificate is applicable after the 30-year anniversary of the Completion Certificate.
               </p>
-              {/* Quick Fill Test Presets */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('1990-05-15')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  1990-05-15 (&gt;30y)
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('1996-07-01')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  1996-07-01 (=30y)
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setCompletionDate('2008-01-10')}
-                  className="text-[10px] h-5 px-1.5 border-slate-200 text-slate-700"
-                >
-                  2008-01-10 (&lt;30y)
-                </Button>
-                {completionDate && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setCompletionDate('')}
-                    className="text-[10px] h-5 px-1.5 text-rose-600"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
             </div>
 
             {/* Payment Declaration */}

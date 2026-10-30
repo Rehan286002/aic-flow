@@ -10,7 +10,7 @@ class Role(Base):
     __table_args__ = (
         CheckConstraint(
             "role_code IN ('INSTITUTION_USER', 'INTAKE_OFFICER', 'SCRUTINY_OFFICER', "
-            "'REGIONAL_OFFICER', 'EVC_COORDINATOR', 'EVC_MEMBER', 'COMMITTEE_SECRETARIAT', "
+            "'REGIONAL_OFFICER', 'EVC_COORDINATOR', 'EVC_MEMBER', 'COMMITTEE_SECRETARIAT', 'SAC_SECRETARIAT', 'COUNCIL_SECRETARIAT', "
             "'BUREAU_SUPERVISOR', 'COMPETENT_AUTHORITY', 'REGULATORY_POLICY_PUBLISHER', "
             "'AUDITOR', 'LEAD_AUDITOR', 'ADMIN')",
             name="chk_role_code",

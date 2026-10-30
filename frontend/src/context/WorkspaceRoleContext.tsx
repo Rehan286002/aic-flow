@@ -4,7 +4,7 @@ import type { Role, RoleConfig } from '../types/roles';
 import { ROLES } from '../types/roles';
 import { roleCodeToWorkspace } from '../types/auth';
 import { useAuth } from '@/hooks/useAuth';
-import { DemoRoleContext } from './demo-role-context';
+import { WorkspaceRoleContext } from './workspace-role-context';
 
 const SIDEBAR_STORAGE_KEY = 'aic_flow_sidebar_collapsed';
 
@@ -23,7 +23,7 @@ function getInitials(name?: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function DemoRoleProvider({ children }: { children: ReactNode }) {
+export function WorkspaceRoleProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -77,9 +77,9 @@ export function DemoRoleProvider({ children }: { children: ReactNode }) {
     let dynamicOrg = base.organization;
     if (auth.activeContext) {
       if (auth.activeContext.institution_id) {
-        dynamicOrg = `Institution scope (${auth.activeContext.institution_id.slice(0, 8)})`;
+        dynamicOrg = 'Institution Workspace';
       } else if (auth.activeContext.review_team_id) {
-        dynamicOrg = `Authorised review team (${auth.activeContext.review_team_id.slice(0, 8)})`;
+        dynamicOrg = 'Regulatory Review Team';
       }
     }
 
@@ -92,7 +92,7 @@ export function DemoRoleProvider({ children }: { children: ReactNode }) {
   }, [currentRole, auth.user, auth.activeContext]);
 
   return (
-    <DemoRoleContext.Provider
+    <WorkspaceRoleContext.Provider
       value={{
         currentRole,
         currentRoleConfig,
@@ -103,6 +103,6 @@ export function DemoRoleProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </DemoRoleContext.Provider>
+    </WorkspaceRoleContext.Provider>
   );
 }

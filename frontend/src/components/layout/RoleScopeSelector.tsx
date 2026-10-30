@@ -36,7 +36,7 @@ const ROLE_ICONS: Record<Role, React.ComponentType<{ className?: string }>> = {
   admin: UserCog,
 };
 
-export function DemoRoleSelector() {
+export function RoleScopeSelector() {
   const navigate = useNavigate();
   const auth = useAuth();
 
@@ -119,9 +119,7 @@ export function DemoRoleSelector() {
                         <Icon className="size-3.5 text-muted-foreground" />
                         <div>
                           <div className="font-medium text-foreground">{label}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {rc.role_code}
-                          </div>
+
                         </div>
                       </div>
                     </SelectItem>

@@ -3,7 +3,7 @@
 **AICTE Approval Workflow and Compliance Platform**  
 Smart India Hackathon 2026 · Problem Statement 26262
 
-AIC-Flow brings application intake, category-specific routing, scrutiny, clarification and resubmission, EVC/committee coordination where applicable, authorised decisions, post-decision conditions, compliance evidence, notifications and audit history into one case lifecycle. Existing document extraction and evidence validation capabilities remain available as a supporting subsystem.
+AIC-Flow brings application intake, category-specific routing, scrutiny, clarification and resubmission, EVC and committee coordination where applicable, authorised decisions, SAC appeals, post-decision conditions, version-linked lease and regulatory-document validity, renewal alerts, compliance evidence, notifications and audit history into one connected case lifecycle. Existing document extraction, evidence validation and verification capabilities remain available as a supporting subsystem.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ AIC-Flow brings application intake, category-specific routing, scrutiny, clarifi
 - Backend: FastAPI + Pydantic + SQLAlchemy + Alembic
 - Database: PostgreSQL
 - Supporting services: Redis, ClamAV, private document storage
-- OCR/text extraction: existing `pypdf`, `pypdfium2`, RapidOCR/ONNX Runtime and OpenCV pipeline
+- OCR/text extraction: `pypdf`, `pypdfium2`, RapidOCR/ONNX Runtime and OpenCV-based document extraction pipeline
 
 This is a modular monolith. Do not deploy the frontend as a substitute for backend, database, queue or private document storage services.
 
@@ -39,6 +39,9 @@ Run the migration against a fresh database and a backed-up existing database bef
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Vercel hosts the static frontend only. Deploy FastAPI to a persistent Python/container host and provision managed PostgreSQL, Redis and private persistent storage separately. Cross-origin cookie settings and CORS must be configured together.
 
 ## Regulatory and security boundaries
+
+- Document text and field extraction are assistance signals. Regulatory assessment and statutory outcomes remain with authorised officers.
+- Workflow and compliance checks use deterministic rules and persisted case records; no AI model makes an approval or rejection decision.
 
 - Route logic is category-specific and version-pinned. Only configured categories are automatically routed; unsupported categories stop for manual policy confirmation.
 - EVC and committee steps remain distinct. Their applicability must come from the approved category route.

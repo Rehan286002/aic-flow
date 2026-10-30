@@ -1,13 +1,97 @@
 from types import SimpleNamespace
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
 
-from app.services.workflow_service import case_access_context, route_profile_for, validate_operational_event, validate_transition
+from app.services.workflow_service import (
+    calculate_appeal_deadline,
+    case_access_context,
+    evc_completion_assignee,
+    intake_review_assignee,
+    route_profile_for,
+    validate_ec_decision_stage,
+    validate_shc_hearing_record,
+    validate_shc_recommendation,
+    validate_shc_stage,
+    validate_evc_report_stage,
+    validate_evc_schedule_stage,
+    validate_operational_event,
+    validate_transition,
+)
 
 
 def case(stage: str, route: dict):
     return SimpleNamespace(current_stage=stage, route_snapshot=route)
+
+
+def test_intake_review_assignment_stays_with_intake_for_eoa_route():
+    _code, _version, snapshot = route_profile_for("EOA_SELF_DISCLOSURE")
+    assert intake_review_assignee(snapshot) == "INTAKE_OFFICER"
+
+
+def test_intake_review_assignment_hands_increase_intake_to_scrutiny():
+    _code, _version, snapshot = route_profile_for("INCREASE_INTAKE")
+    assert intake_review_assignee(snapshot) == "SCRUTINY_OFFICER"
+
+
+def test_unknown_route_does_not_auto_assign_scrutiny():
+    _code, _version, snapshot = route_profile_for("UNCONFIGURED_CATEGORY")
+    assert intake_review_assignee(snapshot) == "INTAKE_OFFICER"
+
+
+def test_evc_completion_routes_to_shc_only_when_applicability_is_confirmed():
+    assert evc_completion_assignee({"requires_committee": True}) == "COMMITTEE_SECRETARIAT"
+    assert evc_completion_assignee({"requires_committee": False}) == "REGIONAL_OFFICER"
+    assert evc_completion_assignee({"requires_committee": None}) == "REGIONAL_OFFICER"
+
+
+def test_shc_proceeding_requires_route_confirmed_committee_stage():
+    validate_shc_stage(case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}))
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_stage(case("COMMITTEE_PROCEEDINGS", {"requires_committee": None}))
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_stage(case("EVC_COMPLETED", {"requires_committee": True}))
+    assert exc.value.status_code == 409
+
+
+def test_shc_hearing_requires_a_scheduled_proceeding():
+    validate_shc_hearing_record(
+        case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+        SimpleNamespace(status="SCHEDULED", hearing_scheduled_at=None),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_hearing_record(case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}), None)
+    assert exc.value.status_code == 409
+
+
+def test_shc_recommendation_requires_hearing_record():
+    validate_shc_recommendation(
+        case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+        SimpleNamespace(status="HEARING_RECORDED"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_shc_recommendation(
+            case("COMMITTEE_PROCEEDINGS", {"requires_committee": True}),
+            SimpleNamespace(status="SCHEDULED"),
+        )
+    assert exc.value.status_code == 409
+
+
+def test_executive_committee_decision_requires_authority_and_correct_stage():
+    validate_ec_decision_stage(case("AWAITING_AUTHORITY", {}), "COMPETENT_AUTHORITY")
+    with pytest.raises(HTTPException) as exc:
+        validate_ec_decision_stage(case("AWAITING_AUTHORITY", {}), "COMMITTEE_SECRETARIAT")
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException) as exc:
+        validate_ec_decision_stage(case("EVC_COMPLETED", {}), "COMPETENT_AUTHORITY")
+    assert exc.value.status_code == 409
+
+
+def test_speaking_order_upload_starts_seven_day_appeal_window():
+    uploaded_at = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
+    assert calculate_appeal_deadline(uploaded_at) == datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 
 
 def test_eoa_self_disclosure_has_no_scrutiny_or_evc_stage():
@@ -63,17 +147,36 @@ def test_eoa_supervisory_hold_returns_to_intake_not_scrutiny():
     validate_transition(case("ON_HOLD", snapshot), "BUREAU_SUPERVISOR", "INTAKE_REVIEW")
 
 
-def test_evc_schedule_event_is_restricted_to_coordination_stage():
-    validate_operational_event(case("EVC_COORDINATION", {}), "EVC_VISIT_SCHEDULED")
+def test_evc_schedule_requires_route_applicability_and_coordination_stage():
+    validate_evc_schedule_stage(case("EVC_COORDINATION", {"requires_evc": True}))
+    validate_evc_schedule_stage(case("EVC_SCHEDULED", {"requires_evc": True}), SimpleNamespace(status="SCHEDULED"))
     with pytest.raises(HTTPException) as exc:
-        validate_operational_event(case("SCRUTINY", {}), "EVC_VISIT_SCHEDULED")
+        validate_evc_schedule_stage(case("SCRUTINY", {"requires_evc": True}))
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_schedule_stage(case("EVC_COORDINATION", {"requires_evc": False}))
     assert exc.value.status_code == 409
 
 
-def test_evc_report_event_is_restricted_to_scheduled_stage():
-    validate_operational_event(case("EVC_SCHEDULED", {}), "EVC_REPORT_RECORDED")
+def test_evc_completed_visit_cannot_be_rescheduled():
     with pytest.raises(HTTPException) as exc:
-        validate_operational_event(case("EVC_COORDINATION", {}), "EVC_REPORT_RECORDED")
+        validate_evc_schedule_stage(
+            case("EVC_SCHEDULED", {"requires_evc": True}),
+            SimpleNamespace(status="COMPLETED"),
+        )
+    assert exc.value.status_code == 409
+
+
+def test_evc_report_requires_a_current_scheduled_visit():
+    validate_evc_report_stage(
+        case("EVC_SCHEDULED", {"requires_evc": True}),
+        SimpleNamespace(status="SCHEDULED"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_report_stage(case("EVC_SCHEDULED", {}), None)
+    assert exc.value.status_code == 409
+    with pytest.raises(HTTPException) as exc:
+        validate_evc_report_stage(case("EVC_COORDINATION", {}), SimpleNamespace(status="SCHEDULED"))
     assert exc.value.status_code == 409
 
 

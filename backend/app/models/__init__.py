@@ -19,6 +19,7 @@ from app.models.application_field_value import ApplicationFieldValue
 from app.models.document_type import DocumentType
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
+from app.models.document_validity import DocumentValidityRecord
 from app.models.application_document_link import ApplicationDocumentLink
 from app.models.document_processing_job import DocumentProcessingJob
 from app.models.document_extraction import DocumentExtraction
@@ -42,11 +43,16 @@ from app.models.document_security_scan import DocumentSecurityScan
 from app.models.document_metadata_observation import DocumentMetadataObservation
 from app.models.digital_signature_check import DigitalSignatureCheck
 
-# Approval workflow, post-decision obligations and alerts
+# Approval workflow, committee proceedings, EVC coordination, post-decision obligations and alerts
+from app.models.evc_visit import EVCVisit
+from app.models.executive_committee_decision import ExecutiveCommitteeDecision
+from app.models.shc_proceeding import SHCProceeding
+from app.models.sac_appeal import SACAppeal
 from app.models.workflow_case import WorkflowCase
 from app.models.workflow_event import WorkflowEvent
 from app.models.compliance_obligation import ComplianceObligation
 from app.models.in_app_notification import InAppNotification
+from app.models.workflow_reminder import WorkflowReminderPolicy, WorkflowReminderDispatch
 
 # Validation engine and evidence intelligence
 from app.models.validation_run import ValidationRun
@@ -77,6 +83,7 @@ __all__ = [
     "DocumentType",
     "Document",
     "DocumentVersion",
+    "DocumentValidityRecord",
     "ApplicationDocumentLink",
     "DocumentProcessingJob",
     "DocumentExtraction",
@@ -98,10 +105,16 @@ __all__ = [
     "DocumentMetadataObservation",
     "DigitalSignatureCheck",
     # Approval workflow, post-decision obligations and alerts
+    "EVCVisit",
+    "ExecutiveCommitteeDecision",
+    "SHCProceeding",
+    "SACAppeal",
     "WorkflowCase",
     "WorkflowEvent",
     "ComplianceObligation",
     "InAppNotification",
+    "WorkflowReminderPolicy",
+    "WorkflowReminderDispatch",
     # Validation engine and evidence intelligence
     "ValidationRun",
     "ValidationRunRuleVersion",

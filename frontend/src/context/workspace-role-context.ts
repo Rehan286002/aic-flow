@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import type { Role, RoleConfig } from '../types/roles';
 
-export interface DemoRoleContextType {
+export interface WorkspaceRoleContextType {
   currentRole: Role;
   currentRoleConfig: RoleConfig;
   setRole: (role: Role, navigateToDefault?: boolean) => void;
@@ -10,4 +10,4 @@ export interface DemoRoleContextType {
   toggleSidebar: () => void;
 }
 
-export const DemoRoleContext = createContext<DemoRoleContextType | undefined>(undefined);
+export const WorkspaceRoleContext = createContext<WorkspaceRoleContextType | undefined>(undefined);

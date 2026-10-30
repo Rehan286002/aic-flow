@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { documentsApi } from '@/features/documents/api';
+import { workflowApi } from '@/features/workflow/api';
 import type { ApplicationRequirementItem } from '@/types/application';
 import type { DocumentUploadResponse } from '@/types/document';
 import {
@@ -27,6 +28,8 @@ interface DocumentUploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   requirement: ApplicationRequirementItem | null;
+  obligationId?: string | null;
+  validityCaseId?: string | null;
   onUploadSuccess: (response: DocumentUploadResponse) => void;
 }
 
@@ -34,12 +37,15 @@ export function DocumentUploadModal({
   open,
   onOpenChange,
   requirement,
+  obligationId = null,
+  validityCaseId = null,
   onUploadSuccess,
 }: DocumentUploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [scanResult, setScanResult] = useState<DocumentUploadResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [evidenceNote, setEvidenceNote] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resetState = () => {
@@ -47,6 +53,7 @@ export function DocumentUploadModal({
     setUploading(false);
     setScanResult(null);
     setErrorMessage(null);
+    setEvidenceNote('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -99,31 +106,48 @@ export function DocumentUploadModal({
 
   const handleSubmit = async () => {
     if (!requirement || !selectedFile) return;
+    if (obligationId && evidenceNote.trim().length < 5) {
+      setErrorMessage('Add a short note describing the condition evidence.');
+      return;
+    }
 
     setUploading(true);
     setErrorMessage(null);
     setScanResult(null);
 
     try {
-      const res = await documentsApi.upload(
-        requirement.application_requirement_id,
-        selectedFile
-      );
+      const res = obligationId
+        ? await workflowApi.uploadObligationEvidence(
+            obligationId,
+            requirement.application_requirement_id,
+            selectedFile,
+            evidenceNote.trim(),
+          )
+        : validityCaseId
+          ? await workflowApi.uploadDocumentValiditySource(
+              validityCaseId,
+              requirement.application_requirement_id,
+              selectedFile,
+            )
+          : await documentsApi.upload(
+              requirement.application_requirement_id,
+              selectedFile
+            );
       setScanResult(res);
 
       if (res.document_version.is_clean) {
-        toast.success('Document uploaded and verified clean', {
-          description: `Version ${res.document_version.version_number} recorded with SHA-256 integrity.`,
+        toast.success(obligationId ? 'Condition evidence submitted' : validityCaseId ? 'Renewed document uploaded' : 'Document uploaded successfully', {
+          description: obligationId ? 'The clean document version is linked to the selected approval condition.' : validityCaseId ? 'The clean replacement version is available for validity details and officer review.' : `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
         });
         onUploadSuccess(res);
       } else if (res.document_version.security_scan?.scan_status === 'DETECTED') {
-        toast.error('Malware Detected', {
-          description: `File flagged as ${res.document_version.security_scan.threat_name}. Version rejected.`,
+        toast.error('File could not be accepted', {
+          description: `The file did not pass the security check and was not added to the application.`,
         });
         onUploadSuccess(res);
       } else {
-        toast.warning('Antivirus scan error', {
-          description: 'Document placed in quarantine pending scan retry.',
+        toast.warning('File safety check needs attention', {
+          description: 'The required safety check could not be completed. The file has not been added to application evidence.',
         });
         onUploadSuccess(res);
       }
@@ -156,16 +180,17 @@ export function DocumentUploadModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {obligationId && <label className="grid gap-1 text-xs font-medium text-slate-700">Condition evidence note
+            <textarea value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} rows={2} placeholder="Describe how this document addresses the approval condition" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+          </label>}
           {/* Regulatory Guidelines Notice */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
             <div className="font-medium text-slate-800 flex items-center gap-1.5">
               <ShieldCheck className="size-4 text-indigo-600" />
-              <span>Evidence Ingestion & Security Validation Pipeline</span>
+              <span>File Safety Check</span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Files are streamed directly to private quarantine storage, scanned by ClamAV for
-              viruses/malware, verified for authentic file headers, and stamped with an immutable
-              SHA-256 fingerprint. Accepted formats: PDF, JPEG, PNG (max 20 MB).
+              Your document is checked for file safety and integrity before it is added to the application. Accepted formats: PDF, JPEG, PNG (max 20 MB).
             </p>
           </div>
 
@@ -251,40 +276,33 @@ export function DocumentUploadModal({
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-emerald-900">
                     <ShieldCheck className="size-5 text-emerald-600" />
-                    <span>Antivirus Verification: CLEAN (Passed)</span>
+                    <span>File safety check passed</span>
                   </div>
                   <p className="text-emerald-800 text-[11px]">
-                    Document was scanned by ClamAV daemon and verified free of known threats.
-                    Assigned Version {scanResult.document_version.version_number} as active evidence.
+                    The document passed the required safety and integrity checks. Version {scanResult.document_version.version_number} is now active evidence.
                   </p>
-                  <div className="pt-1 text-[11px] font-mono text-emerald-950 bg-emerald-100/60 p-2 rounded border border-emerald-200 truncate">
-                    SHA-256: {scanResult.document_version.sha256_hex}
+                  <div className="pt-1 text-[11px] font-medium text-emerald-800">
+                    File integrity: Verified
                   </div>
                 </div>
               ) : scanResult.document_version.security_scan?.scan_status === 'DETECTED' ? (
                 <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-rose-900">
                     <ShieldAlert className="size-5 text-rose-600" />
-                    <span>SECURITY ALERT: Malware Signature Detected</span>
+                    <span>File safety check not passed</span>
                   </div>
                   <p className="text-rose-800 text-[11px]">
-                    ClamAV detected infected signature: {' '}
-                    <strong className="font-mono text-rose-950">
-                      {scanResult.document_version.security_scan.threat_name}
-                    </strong>
-                    . This version was rejected and placed in isolated rejected storage.
-                    Downloads are prohibited.
+                    The file did not pass the security check and has not been added to the application. Please choose a different file.
                   </p>
                 </div>
               ) : (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-semibold text-amber-900">
                     <AlertTriangle className="size-5 text-amber-600" />
-                    <span>Scan Error: Quarantined</span>
+                    <span>File check pending</span>
                   </div>
                   <p className="text-amber-800 text-[11px]">
-                    Antivirus scanner timed out or returned an error. File remains in quarantine
-                    and can be retried from the version history.
+                    The file could not complete the required safety check and has not been added to application evidence. Please retry later or contact support.
                   </p>
                 </div>
               )}
@@ -315,12 +333,12 @@ export function DocumentUploadModal({
               {uploading ? (
                 <>
                   <Loader2 className="size-3.5 animate-spin" />
-                  <span>Scanning with ClamAV...</span>
+                  <span>Checking file safety…</span>
                 </>
               ) : (
                 <>
                   <FileCheck2 className="size-3.5" />
-                  <span>Upload & Scan Evidence</span>
+                  <span>Upload Document</span>
                 </>
               )}
             </Button>

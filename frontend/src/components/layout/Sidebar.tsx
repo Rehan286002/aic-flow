@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { ROLE_NAVIGATION } from '@/config/navigation';
 import {
   Tooltip,
@@ -20,7 +20,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) {
-  const { currentRole, currentRoleConfig, sidebarCollapsed, toggleSidebar } = useDemoRole();
+  const { currentRole, currentRoleConfig, sidebarCollapsed, toggleSidebar } = useWorkspaceRole();
   const navItems = ROLE_NAVIGATION[currentRole] || [];
 
   const isCollapsed = !isMobileSheet && sidebarCollapsed;
@@ -165,7 +165,7 @@ export function Sidebar({ onCloseMobile, isMobileSheet = false }: SidebarProps) 
                 <Sparkles className="size-3 text-indigo-400" />
                 <span>Academic Year 2026-27</span>
               </span>
-              <span className="font-mono text-[10px] text-slate-400">SIH 26262</span>
+              <span className="font-mono text-[10px] text-slate-400">AICTE</span>
             </div>
 
             {!isMobileSheet && (

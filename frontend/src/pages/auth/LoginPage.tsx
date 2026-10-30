@@ -48,7 +48,7 @@ export default function LoginPage() {
           ? from
           : auth.activeWorkspace
             ? ROLES[auth.activeWorkspace].defaultPath
-            : '/auditor/dashboard';
+            : '/workflow';
       navigate(targetPath, { replace: true });
     }
   }, [auth.status, auth.user, auth.activeWorkspace, location.state, navigate]);

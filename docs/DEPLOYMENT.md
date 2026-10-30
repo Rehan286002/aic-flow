@@ -14,7 +14,7 @@ Create a Vercel project from the AIC-Flow repository with:
 
 ## Backend — persistent Python/container host
 
-Deploy `backend/Dockerfile` on a service that supports a persistent process and outgoing access to managed PostgreSQL, Redis and ClamAV (or an approved scanning alternative). Do not deploy FastAPI as a static Vercel site. Configure the following environment variables in the host secret/configuration panel:
+Deploy `backend/Dockerfile` on a service that supports persistent API, worker and scheduler processes and outgoing access to managed PostgreSQL, Redis and ClamAV (or an approved scanning alternative). Do not deploy FastAPI as a static Vercel site. Configure the following environment variables in the host secret/configuration panel:
 
 - `APP_ENV=production`
 - `DATABASE_URL` — managed PostgreSQL connection string with SSL as required by the provider
@@ -32,6 +32,31 @@ Deploy `backend/Dockerfile` on a service that supports a persistent process and 
 
 Set the frontend's `VITE_API_URL` to the exact HTTPS backend origin, without an API path suffix. Rebuild/redeploy the frontend after changing it because Vite variables are build-time values.
 
+## Workflow reminders and escalations
+
+The production Compose file includes separate `workflow-worker` and `workflow-beat` services. Start both with the API and data services:
+
+```bash
+docker compose -f compose.prod.yaml up -d workflow-worker workflow-beat
+```
+
+The Beat process triggers the reminder cycle every 15 minutes; the worker evaluates enabled policy rows and creates persistent in-app notifications. Dispatch records and unique recipient/event keys make each policy/target reminder idempotent across retries and restarts. Run one Beat instance for a deployment; worker concurrency can be scaled independently.
+
+For a managed container host, deploy two additional processes from the same backend image and environment:
+- Worker command: `celery -A app.core.celery_app:celery_app worker --loglevel=INFO --concurrency=2`
+- Scheduler command: `celery -A app.core.celery_app:celery_app beat --loglevel=INFO --schedule=/var/lib/aic-flow/beat-schedule`
+
+Persist the Beat schedule directory, keep only one active Beat scheduler, and ensure the worker and scheduler use the same PostgreSQL and Redis configuration as the API.
+
+For local development, run these in separate backend terminals after starting PostgreSQL and Redis:
+
+```bash
+uv run celery -A app.core.celery_app:celery_app worker --loglevel=INFO
+uv run celery -A app.core.celery_app:celery_app beat --loglevel=INFO
+```
+
+Reminders are delivered through the in-app notification centre. The configured policies cover application-stage due dates, post-approval condition due dates, lease expiry, certificate expiry and the thirty-year Structural Stability Certificate review trigger. Only officer-verified document-validity records are eligible for expiry reminders; returned or superseded records are excluded.
+
 ## Database and documents
 
 Provision managed PostgreSQL and Redis separately. Apply migrations once from a controlled release job: `cd backend && uv run alembic upgrade head`. Confirm there is one Alembic head first. Never run development seed or reset scripts against production.
@@ -44,7 +69,7 @@ The backend uses credentialed cookie authentication and CSRF protection. The fro
 
 ## What is not automatically deployed
 
-This repository configuration does not create hosting accounts, provision paid database/storage resources, issue AICTE/API Setu credentials, or enable an official AICTE integration. Those require owner/provider action and service-specific configuration. Scheduled reminders also require a running scheduler/worker; the persisted in-app event/notification path alone is not a background scheduler.
+This repository configuration does not create hosting accounts, provision paid database/storage resources, issue AICTE/API Setu credentials, or enable an official AICTE integration. Those require owner/provider action and service-specific configuration. Scheduled reminder delivery requires both the dedicated worker and the single Beat scheduler to be running.
 
 ## Baseline checklist publication
 

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { formatRoleContextLabel } from '@/types/auth';
 import {
   DropdownMenu,
@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 export function UserMenu() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const { currentRoleConfig } = useDemoRole();
+  const { currentRoleConfig } = useWorkspaceRole();
 
   const handleLogout = async () => {
     try {

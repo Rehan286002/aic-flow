@@ -40,7 +40,7 @@ test('getRoleContextKey creates distinct keys preserving scope without deduplica
   };
   const context3: RoleContext = {
     role_code: 'INSTITUTION_USER',
-    institution_id: 'inst-synth-001',
+    institution_id: 'institution-central-001',
     review_team_id: null,
   };
 
@@ -50,16 +50,16 @@ test('getRoleContextKey creates distinct keys preserving scope without deduplica
 
   assert.equal(key1, 'AUDITOR::team-west-01');
   assert.equal(key2, 'AUDITOR::team-north-02');
-  assert.equal(key3, 'INSTITUTION_USER:inst-synth-001:');
+  assert.equal(key3, 'INSTITUTION_USER:institution-central-001:');
 
   // Verify that same role_code with different teams produces distinct keys
   assert.notEqual(key1, key2);
 });
 
-test('formatRoleContextLabel formats regulatory scope labels with truncated IDs', () => {
+test('formatRoleContextLabel presents role names without internal identifiers', () => {
   const institutionContext: RoleContext = {
     role_code: 'INSTITUTION_USER',
-    institution_id: 'SYNTH-AICTE-0001',
+    institution_id: 'institution-central-0001',
     review_team_id: null,
   };
   const teamContext: RoleContext = {
@@ -73,8 +73,8 @@ test('formatRoleContextLabel formats regulatory scope labels with truncated IDs'
     review_team_id: null,
   };
 
-  assert.equal(formatRoleContextLabel(institutionContext), 'Institution · SYNTH-AI');
-  assert.equal(formatRoleContextLabel(teamContext), 'Scrutiny / Processing Officer · Team TEAM-WES');
+  assert.equal(formatRoleContextLabel(institutionContext), 'Institution Representative');
+  assert.equal(formatRoleContextLabel(teamContext), 'Scrutiny / Processing Officer');
   assert.equal(formatRoleContextLabel(adminContext), 'Platform Administrator');
 });
 
@@ -86,7 +86,7 @@ test('formatRoleContextLabel preserves distinct PS 26262 permission package name
     ['REGIONAL_OFFICER', 'Regional Officer / Coordinator'],
     ['EVC_COORDINATOR', 'EVC Coordinator'],
     ['EVC_MEMBER', 'EVC Assigned Participant'],
-    ['COMMITTEE_SECRETARIAT', 'Committee Secretariat'],
+    ['COMMITTEE_SECRETARIAT', 'Standing Hearing Committee Secretariat'],
     ['BUREAU_SUPERVISOR', 'Bureau Supervisor'],
     ['COMPETENT_AUTHORITY', 'Competent Authority'],
     ['REGULATORY_POLICY_PUBLISHER', 'Regulatory Policy Publisher / Approver'],

@@ -40,6 +40,47 @@ from app.services.storage_service import storage_service
 logger = logging.getLogger(__name__)
 
 
+DOCUMENT_TEAM_ROLES = {
+    "AUDITOR",
+    "LEAD_AUDITOR",
+    "INTAKE_OFFICER",
+    "SCRUTINY_OFFICER",
+    "REGIONAL_OFFICER",
+    "EVC_COORDINATOR",
+    "EVC_MEMBER",
+    "COMMITTEE_SECRETARIAT",
+    "SAC_SECRETARIAT",
+    "COUNCIL_SECRETARIAT",
+    "BUREAU_SUPERVISOR",
+    "COMPETENT_AUTHORITY",
+}
+
+
+def has_document_scope_access(
+    institution_id: UUID,
+    review_team_id: UUID | None,
+    role_contexts: list[object],
+) -> bool:
+    """Check document access against the institution or the application's active review team."""
+    for context in role_contexts:
+        role_code = getattr(context, "role_code", None)
+        context_institution_id = getattr(context, "institution_id", None)
+        context_review_team_id = getattr(context, "review_team_id", None)
+        if role_code == "ADMIN":
+            return True
+        if role_code == "INSTITUTION_USER" and context_institution_id == institution_id:
+            return True
+        if role_code == "INTAKE_OFFICER" and review_team_id is None:
+            return True
+        if (
+            role_code in DOCUMENT_TEAM_ROLES
+            and review_team_id is not None
+            and context_review_team_id == review_team_id
+        ):
+            return True
+    return False
+
+
 class DocumentUploadService:
     def __init__(self, scanner: BaseMalwareScanner | None = None):
         self._scanner = scanner
@@ -92,22 +133,17 @@ class DocumentUploadService:
                 detail="Application not found",
             )
 
-        # Check tenant isolation via validated active role contexts
+        # Check tenant and review-team isolation against validated active role contexts.
         active_contexts = get_active_role_assignments(user, db)
-        is_privileged = any(
-            c.role_code in ("AUDITOR", "LEAD_AUDITOR", "ADMIN") for c in active_contexts
-        )
-
-        if not is_privileged:
-            inst_context = next(
-                (c for c in active_contexts if c.role_code == "INSTITUTION_USER"),
-                None,
+        if not has_document_scope_access(
+            app.institution_id,
+            app.review_team_id,
+            active_contexts,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: the application is outside your institution or review-team scope.",
             )
-            if not inst_context or inst_context.institution_id != app.institution_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied: application belongs to another institution",
-                )
 
         return rev, app
 
@@ -248,6 +284,8 @@ class DocumentUploadService:
                 )
                 v_read = self._build_version_read(v, scan, job)
                 version_reads.append(v_read)
+                # Preserve the last clean version as active until a clean
+                # replacement arrives; rejected uploads do not invalidate prior evidence.
                 if active_version_id is None and v_read.is_clean:
                     active_version_id = v.document_version_id
 
@@ -266,6 +304,8 @@ class DocumentUploadService:
         application_requirement_id: UUID,
         user: User,
         upload_file: UploadFile,
+        *,
+        update_requirement_status: bool = True,
     ) -> DocumentUploadResponse:
         # 1. Lock requirement row
         req = self._get_requirement_with_lock(db, application_requirement_id)
@@ -471,32 +511,30 @@ class DocumentUploadService:
 
             # 11. Update requirement status
             if scan_result.status == "CLEAN":
-                req.status = RequirementStatus.UPLOADED
+                if update_requirement_status:
+                    req.status = RequirementStatus.UPLOADED
                 message = f"Document '{val_result.original_filename}' uploaded and verified clean (v{new_version_num})."
             elif scan_result.status == "DETECTED":
-                # Check if requirement already has an active clean version
-                active_v, _ = self.get_active_clean_version(
-                    db, application_requirement_id
-                )
-                if not active_v:
-                    req.status = RequirementStatus.PENDING
-                # If active_v exists, req.status remains UPLOADED!
+                if update_requirement_status:
+                    active_v, _ = self.get_active_clean_version(db, application_requirement_id)
+                    if not active_v:
+                        req.status = RequirementStatus.PENDING
                 message = (
                     f"SECURITY ALERT: Malware detected ({scan_result.threat_name}) in "
                     f"'{val_result.original_filename}'. Version {new_version_num} rejected."
                 )
             else:  # ERROR
-                active_v, _ = self.get_active_clean_version(
-                    db, application_requirement_id
-                )
-                if not active_v:
-                    req.status = RequirementStatus.PENDING
+                if update_requirement_status:
+                    active_v, _ = self.get_active_clean_version(db, application_requirement_id)
+                    if not active_v:
+                        req.status = RequirementStatus.PENDING
                 message = (
                     f"Antivirus scanning error occurred for '{val_result.original_filename}'. "
                     f"File quarantined; please retry scan."
                 )
 
-            req.last_evaluated_at = func.now()
+            if update_requirement_status:
+                req.last_evaluated_at = func.now()
             db.commit()
 
             # Find active clean version ID after commit

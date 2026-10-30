@@ -7,32 +7,32 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { useDemoRole } from '@/hooks/useDemoRole';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 
 const PATH_TITLES: Record<string, string> = {
-  institution: 'Institution Portal',
-  auditor: 'Auditor Workspace',
-  lead: 'Lead Auditor Oversight',
+  institution: 'Institution Workspace',
+  auditor: 'Processing Workspace',
+  lead: 'Supervisory Workspace',
   admin: 'Administration',
   overview: 'Overview',
-  dashboard: 'Verification Dashboard',
-  queue: 'Assigned Queue',
+  dashboard: 'Overview',
+  queue: 'Case Queue',
   'case-workspace': 'Case Workspace',
   'evidence-explorer': 'Evidence Explorer',
   'source-verification': 'Source Verification',
   'finding-review': 'Finding Review',
   activity: 'Case Activity',
   reports: 'Reports & Proofs',
-  assist: 'AIC Assist',
+  assist: 'Regulatory Guidance',
   applications: 'Applications',
   new: 'New Application',
-  documents: 'Document Center',
+  documents: 'Documents',
   rectification: 'Rectification',
   'escalated-queue': 'Escalated Queue',
   'case-review': 'Lead Case Review',
   recommendations: 'Recommendations',
   'inspection-referrals': 'Inspection Referrals',
-  'temporal-replay': 'Temporal Replay',
+  'temporal-replay': 'Case History',
   'audit-history': 'Audit History',
   users: 'Users & Roles',
   teams: 'Review Teams',
@@ -45,7 +45,7 @@ const PATH_TITLES: Record<string, string> = {
 
 export function AppBreadcrumbs() {
   const location = useLocation();
-  const { currentRoleConfig } = useDemoRole();
+  const { currentRoleConfig } = useWorkspaceRole();
   const pathnames = location.pathname.split('/').filter(Boolean);
 
   if (pathnames.length === 0) {
