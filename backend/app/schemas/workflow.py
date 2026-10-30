@@ -433,6 +433,7 @@ class DocumentValidityResponse(BaseModel):
     maximum_course_duration_years: int | None = None
     lease_minimum_term_met: bool | None = None
     lease_live_term_met_at_submission: bool | None = None
+    lease_eoa_cutoff_year_triggered: bool | None = None
     lease_assessed_on: date | None = None
     validity_basis_reference: str
     submitted_by: uuid.UUID
