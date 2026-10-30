@@ -3,7 +3,7 @@
 **AICTE Approval Workflow and Compliance Platform**  
 Smart India Hackathon 2026 · Problem Statement 26262
 
-AIC-Flow brings application intake, category-specific routing, scrutiny, clarification and resubmission, EVC and committee coordination where applicable, authorised decisions, post-decision conditions, compliance evidence, notifications and audit history into one connected case lifecycle. Existing document extraction, evidence validation and verification capabilities remain available as a supporting subsystem.
+AIC-Flow brings application intake, category-specific routing, scrutiny, clarification and resubmission, EVC and committee coordination where applicable, authorised decisions, SAC appeals, post-decision conditions, version-linked lease and regulatory-document validity, renewal alerts, compliance evidence, notifications and audit history into one connected case lifecycle. Existing document extraction, evidence validation and verification capabilities remain available as a supporting subsystem.
 
 ## Architecture
 
