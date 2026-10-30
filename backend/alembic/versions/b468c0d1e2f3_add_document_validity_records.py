@@ -36,6 +36,7 @@ def upgrade() -> None:
         sa.Column("maximum_course_duration_years", sa.Integer(), nullable=True),
         sa.Column("lease_minimum_term_met", sa.Boolean(), nullable=True),
         sa.Column("lease_live_term_met_at_submission", sa.Boolean(), nullable=True),
+        sa.Column("lease_eoa_cutoff_year_triggered", sa.Boolean(), nullable=True),
         sa.Column("lease_assessed_on", sa.Date(), nullable=True),
         sa.Column("validity_basis_reference", sa.Text(), nullable=False),
         sa.Column("submitted_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=False),
