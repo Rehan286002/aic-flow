@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { documentsApi } from '@/features/documents/api';
+import { workflowApi } from '@/features/workflow/api';
 import type { ApplicationRequirementItem } from '@/types/application';
 import type { DocumentUploadResponse } from '@/types/document';
 import {
@@ -27,6 +28,7 @@ interface DocumentUploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   requirement: ApplicationRequirementItem | null;
+  obligationId?: string | null;
   onUploadSuccess: (response: DocumentUploadResponse) => void;
 }
 
@@ -34,12 +36,14 @@ export function DocumentUploadModal({
   open,
   onOpenChange,
   requirement,
+  obligationId = null,
   onUploadSuccess,
 }: DocumentUploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [scanResult, setScanResult] = useState<DocumentUploadResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [evidenceNote, setEvidenceNote] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resetState = () => {
@@ -47,6 +51,7 @@ export function DocumentUploadModal({
     setUploading(false);
     setScanResult(null);
     setErrorMessage(null);
+    setEvidenceNote('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -99,21 +104,32 @@ export function DocumentUploadModal({
 
   const handleSubmit = async () => {
     if (!requirement || !selectedFile) return;
+    if (obligationId && evidenceNote.trim().length < 5) {
+      setErrorMessage('Add a short note describing the condition evidence.');
+      return;
+    }
 
     setUploading(true);
     setErrorMessage(null);
     setScanResult(null);
 
     try {
-      const res = await documentsApi.upload(
-        requirement.application_requirement_id,
-        selectedFile
-      );
+      const res = obligationId
+        ? await workflowApi.uploadObligationEvidence(
+            obligationId,
+            requirement.application_requirement_id,
+            selectedFile,
+            evidenceNote.trim(),
+          )
+        : await documentsApi.upload(
+            requirement.application_requirement_id,
+            selectedFile
+          );
       setScanResult(res);
 
       if (res.document_version.is_clean) {
-        toast.success('Document uploaded successfully', {
-          description: `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
+        toast.success(obligationId ? 'Condition evidence submitted' : 'Document uploaded successfully', {
+          description: obligationId ? 'The clean document version is linked to the selected approval condition.' : `Version ${res.document_version.version_number} passed the file safety and integrity checks.`,
         });
         onUploadSuccess(res);
       } else if (res.document_version.security_scan?.scan_status === 'DETECTED') {
@@ -156,6 +172,9 @@ export function DocumentUploadModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {obligationId && <label className="grid gap-1 text-xs font-medium text-slate-700">Condition evidence note
+            <textarea value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} rows={2} placeholder="Describe how this document addresses the approval condition" className="rounded-lg border border-slate-200 px-3 py-2 text-xs"/>
+          </label>}
           {/* Regulatory Guidelines Notice */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
             <div className="font-medium text-slate-800 flex items-center gap-1.5">
