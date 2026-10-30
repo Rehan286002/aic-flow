@@ -154,8 +154,21 @@ export default function WorkflowHubPage() {
   }, [refresh, role]);
 
   const openCase = useCallback(async (row: WorkflowCase) => {
-    try { setSelected(await workflowApi.detail(row.workflow_case_id)); }
-    catch (err) { toast.error(err instanceof Error ? err.message : 'Unable to open case.'); }
+    try {
+      setValidityRequirementId('');
+      setValidityHistory(null);
+      setValidityDocumentVersionId('');
+      setValidityReviewNotes({});
+      setValidityIssueDate('');
+      setValidityFrom('');
+      setValidityUntil('');
+      setLeaseStartDate('');
+      setLeaseEndDate('');
+      setValidityBasisReference('');
+      setSelected(await workflowApi.detail(row.workflow_case_id));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to open case.');
+    }
   }, []);
 
   useEffect(() => {
