@@ -2,12 +2,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, or_, select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_role_assignments, get_current_user, get_db, verify_csrf
 from app.models.application import Application
+from app.models.application_requirements import ApplicationRequirement
 from app.models.application_document_link import ApplicationDocumentLink
 from app.models.application_revision import ApplicationRevision
 from app.models.document import Document
@@ -48,6 +49,7 @@ from app.schemas.workflow import (
     CouncilDecisionRequest,
     ComplianceObligationCreateRequest,
     ComplianceObligationResponse,
+    DocumentUploadResponse,
     NotificationResponse,
     WorkflowCaseDetailResponse,
     WorkflowCaseListResponse,
@@ -57,6 +59,7 @@ from app.schemas.workflow import (
     WorkflowTeamAssignmentRequest,
 )
 from app.services.application_service import get_application_detail
+from app.services.document_upload_service import document_upload_service
 from app.services.workflow_service import (
     EVENT_ROLE_ALLOWLIST,
     add_workflow_event,
@@ -744,9 +747,51 @@ def update_obligation(
     if payload.action == "EVIDENCE_SUBMITTED":
         if role != "INSTITUTION_USER" or obligation.status not in {"OPEN", "RETURNED"}:
             raise HTTPException(status_code=403, detail="Only the institution may submit evidence for an open or returned condition.")
-        if not payload.evidence_document_id and not payload.evidence_reference:
+        if not payload.evidence_document_version_id and not payload.evidence_document_id and not payload.evidence_reference:
             raise HTTPException(status_code=422, detail="Provide an uploaded document or an evidence reference.")
-        if payload.evidence_document_id:
+        if payload.evidence_document_version_id:
+            if application.current_revision_id is None:
+                raise HTTPException(status_code=409, detail="The application has no current revision to associate submitted evidence with.")
+            latest_scan_status = (
+                select(DocumentSecurityScan.scan_status)
+                .where(DocumentSecurityScan.document_version_id == DocumentVersion.document_version_id)
+                .order_by(DocumentSecurityScan.scanned_at.desc())
+                .limit(1)
+                .scalar_subquery()
+            )
+            latest_version_number = (
+                select(func.max(DocumentVersion.version_number))
+                .where(DocumentVersion.document_id == Document.document_id)
+                .scalar_subquery()
+            )
+            verified_link = db.execute(
+                select(
+                    DocumentVersion.document_id,
+                    DocumentVersion.document_version_id,
+                    ApplicationDocumentLink.uploaded_for_requirement_id,
+                )
+                .join(Document, Document.document_id == DocumentVersion.document_id)
+                .join(ApplicationDocumentLink, ApplicationDocumentLink.document_version_id == DocumentVersion.document_version_id)
+                .join(ApplicationRevision, ApplicationRevision.application_revision_id == ApplicationDocumentLink.application_revision_id)
+                .where(
+                    DocumentVersion.document_version_id == payload.evidence_document_version_id,
+                    Document.institution_id == application.institution_id,
+                    ApplicationRevision.application_id == application.application_id,
+                    ApplicationRevision.application_revision_id == application.current_revision_id,
+                    DocumentVersion.version_number == latest_version_number,
+                    latest_scan_status == "CLEAN",
+                )
+                .limit(1)
+            ).first()
+            if verified_link is None or verified_link.uploaded_for_requirement_id is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Evidence must be the latest clean-scanned version linked to a requirement on this institution's current application revision.",
+                )
+            obligation.evidence_document_id = verified_link.document_id
+            obligation.evidence_document_version_id = verified_link.document_version_id
+            obligation.evidence_requirement_id = verified_link.uploaded_for_requirement_id
+        elif payload.evidence_document_id:
             if application.current_revision_id is None:
                 raise HTTPException(status_code=409, detail="The application has no current revision to associate submitted evidence with.")
             verified_link = db.scalar(
@@ -769,8 +814,14 @@ def update_obligation(
                     status_code=422,
                     detail="Evidence must be a clean-scanned document linked to this institution's current application revision.",
                 )
+            obligation.evidence_document_id = payload.evidence_document_id
+            obligation.evidence_document_version_id = None
+            obligation.evidence_requirement_id = None
+        else:
+            obligation.evidence_document_id = None
+            obligation.evidence_document_version_id = None
+            obligation.evidence_requirement_id = None
         obligation.status = "EVIDENCE_SUBMITTED"
-        obligation.evidence_document_id = payload.evidence_document_id
         obligation.evidence_reference = payload.evidence_reference
         obligation.submitted_at = now
         obligation.verification_note = payload.note
@@ -811,6 +862,103 @@ def update_obligation(
     db.commit()
     db.refresh(obligation)
     return ComplianceObligationResponse.model_validate(obligation)
+
+
+@router.post("/obligations/{obligation_id}/evidence/{requirement_id}", response_model=DocumentUploadResponse)
+async def upload_compliance_obligation_evidence(
+    obligation_id: uuid.UUID,
+    requirement_id: uuid.UUID,
+    file: Annotated[UploadFile, File(...)],
+    note: Annotated[str, Form(min_length=5, max_length=2000)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    _csrf: Annotated[str, Depends(verify_csrf)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentUploadResponse:
+    obligation = db.get(ComplianceObligation, obligation_id)
+    if obligation is None:
+        raise HTTPException(status_code=404, detail="Compliance obligation not found.")
+    case, application = _get_case(db, obligation.workflow_case_id)
+    context = _require_case_access(db, application, current_user)
+    if context.role_code != "INSTITUTION_USER" or obligation.status not in {"OPEN", "RETURNED"}:
+        raise HTTPException(status_code=403, detail="Only the institution may upload evidence for an open or returned condition.")
+    requirement = db.get(ApplicationRequirement, requirement_id)
+    if (
+        requirement is None
+        or requirement.application_revision_id != application.current_revision_id
+        or requirement.applicability_status != "APPLICABLE"
+    ):
+        raise HTTPException(status_code=422, detail="Choose an applicable document requirement from this application's current revision.")
+
+    upload_response = await document_upload_service.upload_document(
+        db=db,
+        application_requirement_id=requirement_id,
+        user=current_user,
+        upload_file=file,
+        update_requirement_status=False,
+    )
+    if upload_response.document_version.is_clean:
+        obligation = db.scalar(
+            select(ComplianceObligation)
+            .where(ComplianceObligation.obligation_id == obligation_id)
+            .with_for_update()
+        )
+        if obligation is None or obligation.status not in {"OPEN", "RETURNED"}:
+            raise HTTPException(status_code=409, detail="The condition status changed while the document was being uploaded. Review the case before retrying.")
+        now = datetime.now(UTC)
+        obligation.status = "EVIDENCE_SUBMITTED"
+        obligation.evidence_document_id = upload_response.document_version.document_id
+        obligation.evidence_document_version_id = upload_response.document_version.document_version_id
+        obligation.evidence_requirement_id = requirement_id
+        obligation.evidence_reference = upload_response.document_version.original_filename
+        obligation.submitted_at = now
+        obligation.verification_note = note.strip()
+        obligation.updated_at = now
+        event = add_workflow_event(
+            db,
+            case,
+            current_user.user_id,
+            event_type="OBLIGATION_EVIDENCE_UPLOADED",
+            summary=note.strip(),
+            event_payload={
+                "obligation_id": str(obligation_id),
+                "document_id": str(upload_response.document_version.document_id),
+                "document_version_id": str(upload_response.document_version.document_version_id),
+                "requirement_id": str(requirement_id),
+                "filename": upload_response.document_version.original_filename,
+                "version_number": upload_response.document_version.version_number,
+            },
+        )
+        db.commit()
+    return upload_response
+
+
+@router.get("/obligations/{obligation_id}/evidence/download")
+def download_compliance_obligation_evidence(
+    obligation_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    obligation = db.get(ComplianceObligation, obligation_id)
+    if obligation is None or obligation.evidence_document_version_id is None or obligation.evidence_requirement_id is None:
+        raise HTTPException(status_code=404, detail="No uploaded evidence document is attached to this condition.")
+    _case, application = _get_case(db, obligation.workflow_case_id)
+    _require_case_access(db, application, current_user)
+    file_path, filename, mime_type = document_upload_service.get_document_for_download(
+        db=db,
+        application_requirement_id=obligation.evidence_requirement_id,
+        document_version_id=obligation.evidence_document_version_id,
+        user=current_user,
+    )
+    return FileResponse(
+        path=file_path,
+        media_type=mime_type,
+        filename=filename,
+        content_disposition_type="attachment",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+    )
 
 
 @router.get("/obligations", response_model=list[ComplianceObligationResponse])
