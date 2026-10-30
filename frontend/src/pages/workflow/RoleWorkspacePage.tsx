@@ -284,6 +284,12 @@ export default function RoleWorkspacePage({ workspace, section: explicitSection 
       if (stage === 'EVC_COMPLETED' && item.route_snapshot.requires_committee === false) return ['AWAITING_AUTHORITY'];
       if (stage === 'APPROVED' || stage === 'REJECTED') return ['CLOSED'];
     }
+    if (role === 'COMMITTEE_SECRETARIAT' && stage === 'EVC_COMPLETED' && item.route_snapshot.requires_committee === true) {
+      return ['COMMITTEE_PROCEEDINGS'];
+    }
+    if (role === 'COMPETENT_AUTHORITY' && stage === 'APPROVED_WITH_CONDITIONS' && item.obligations.length > 0) {
+      return ['OBLIGATION_TRACKING'];
+    }
     if ((role === 'BUREAU_SUPERVISOR' || role === 'REGIONAL_OFFICER' || role === 'LEAD_AUDITOR') && ['APPROVED', 'REJECTED', 'OBLIGATION_TRACKING'].includes(stage)) return ['CLOSED'];
     if ((role === 'BUREAU_SUPERVISOR' || role === 'REGIONAL_OFFICER' || role === 'LEAD_AUDITOR') && stage === 'ON_HOLD') return [item.route_snapshot.requires_scrutiny === true ? 'SCRUTINY' : 'INTAKE_REVIEW'];
     return [];
